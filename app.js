@@ -1,6 +1,18 @@
 let areas = [];
 let courses = [];
 
+
+document.getElementById('addAreaForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+    addArea();
+});
+
+document.getElementById('addModuleForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+    addModule();
+});
+
+
 // Function to choose a color from the Tailwind colors for each semester
 function generateColor(semester) {
     const tailwindColors = [
@@ -36,13 +48,13 @@ function renderAreas() {
 
         // Bearbeiten Button mit Lucide Icon
         const editButton = document.createElement('button');
-        editButton.innerHTML = '<i data-lucide="edit" class="size-5"></i>';
+        editButton.innerHTML = '<i data-lucide="edit" class="size-4"></i>';
         editButton.onclick = () => editArea(index);
         buttonContainer.appendChild(editButton);
 
         // Löschen Button mit Lucide Icon
         const deleteButton = document.createElement('button');
-        deleteButton.innerHTML = '<i data-lucide="trash" class="size-5"></i>';
+        deleteButton.innerHTML = '<i data-lucide="trash" class="size-4"></i>';
         deleteButton.onclick = () => removeArea(index);
         buttonContainer.appendChild(deleteButton);
 
@@ -72,13 +84,13 @@ function renderAreas() {
 
             // Bearbeiten Button mit Lucide Icon
             const moduleEditButton = document.createElement('button');
-            moduleEditButton.innerHTML = '<i data-lucide="edit" class="size-5"></i>';
+            moduleEditButton.innerHTML = '<i data-lucide="edit" class="size-4"></i>';
             moduleEditButton.onclick = () => editModule(index);
             modulebuttonContainer.appendChild(moduleEditButton);
 
             // Löschen Button mit Lucide Icon
             const deleteButton = document.createElement('button');
-            deleteButton.innerHTML = '<i data-lucide="trash" class="size-5"></i>';
+            deleteButton.innerHTML = '<i data-lucide="trash" class="size-4"></i>';
             deleteButton.onclick = () => removeModule(index);
             modulebuttonContainer.appendChild(deleteButton);
 
@@ -174,6 +186,7 @@ function addArea() {
     }
 }
 
+
 // Bereich bearbeiten
 function editArea(index) {
     const newAreaName = prompt("Neuer Bereich:", areas[index].name);
@@ -216,6 +229,7 @@ function addModule() {
         renderAreas();
     }
 }
+
 
 // Modul entfernen
 function removeModule(index) {

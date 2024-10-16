@@ -13,20 +13,24 @@
         <h1 class="text-3xl font-bold mb-4">Semesterplan Visualisierung</h1>
 
         <!-- Bereich hinzufügen -->
-        <div class="mb-4">
-            <input id="areaInput" type="text" placeholder="Bereich hinzufügen" class="border p-2 mr-2">
-            <button onclick="addArea()" class="bg-green-500 text-white p-2 rounded">Bereich hinzufügen</button>
-        </div>
+        <form id="addAreaForm">
+            <div class="mb-4">
+                <input id="areaInput" type="text" placeholder="Bereich hinzufügen" class="border p-2 mr-2">
+                <button type="submit" class="bg-green-500 text-white p-2 rounded">Bereich hinzufügen</button>
+            </div>
+        </form>
 
         <!-- Module hinzufügen -->
-        <div class="mb-4 gap-2 flex flex-wrap">
-            <input id="moduleTitleInput" type="text" placeholder="Modultitel" class="border p-2 mr-2">
-            <select id="moduleAreaSelect" class="border p-2 mr-2">
-                <option value="">Bereich auswählen</option>
-            </select>
-            <input id="moduleSemesterInput" type="number" placeholder="Semester" class="border p-2 mr-2">
-            <button onclick="addModule()" class="bg-blue-500 text-white p-2 rounded">Modul hinzufügen</button>
-        </div>
+        <form id="addModuleForm">
+            <div class="mb-4 gap-2 flex flex-wrap">
+                <input id="moduleTitleInput" type="text" placeholder="Modultitel" class="border p-2 mr-2">
+                <select id="moduleAreaSelect" class="border p-2 mr-2">
+                    <option value="">Bereich auswählen</option>
+                </select>
+                <input id="moduleSemesterInput" type="number" placeholder="Semester" class="border p-2 mr-2">
+                <button type="submit" class="bg-blue-500 text-white p-2 rounded">Modul hinzufügen</button>
+            </div>
+        </form>
 
         <!-- Bereichsübersicht -->
         <div id="areasContainer" class="flex gap-4">
