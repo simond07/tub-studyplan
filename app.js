@@ -1,5 +1,5 @@
 let areas = [];
-let modules = [];
+let courses = [];
 
 // Function to choose a color from the Tailwind colors for each semester
 function generateColor(semester) {
@@ -52,7 +52,7 @@ function renderAreas() {
 
         const moduleList = document.createElement('div');
         
-        const areaModules = modules.filter(module => module.areas.includes(area.name));
+        const areaModules = courses.filter(module => module.areas.includes(area.name));
         areaModules.forEach((module, index) => {
             const moduleDiv = document.createElement('div');
             moduleDiv.className = 'flex justify-between items-center bg-gray-100 p-2 rounded mb-1';
@@ -102,7 +102,7 @@ function renderAreas() {
     semesterContainer.innerHTML = '';
 
     // Module nach Semestern sortieren
-    const sortedModules = modules.slice().sort((a, b) => a.semester - b.semester);
+    const sortedModules = courses.slice().sort((a, b) => a.semester - b.semester);
 
     // Module nach Semestern gruppieren
     const modulesBySemester = sortedModules.reduce((acc, module) => {
@@ -188,7 +188,7 @@ function editArea(index) {
 // Bereich entfernen
 function removeArea(index) {
     areas.splice(index, 1);
-    modules.forEach(module => {
+    courses.forEach(module => {
         module.areas = module.areas.filter(area => area !== areas[index].name);
     });
     saveToLocalStorage();
@@ -206,7 +206,7 @@ function addModule() {
     const semester = semesterInput.value.trim();
 
     if (title && selectedArea && semester) {
-        modules.push({ title, areas: [selectedArea], semester, multipleAreas: false });
+        courses.push({ title, areas: [selectedArea], semester, multipleAreas: false });
         
         titleInput.value = '';
         areaSelect.value = '';
@@ -219,21 +219,21 @@ function addModule() {
 
 // Modul entfernen
 function removeModule(index) {
-    modules.splice(index, 1);
+    courses.splice(index, 1);
     saveToLocalStorage();
     renderAreas();
 }
 
 // Modul bearbeiten
 function editModule(index) {
-    const moduleToEdit = modules[index];
+    const moduleToEdit = courses[index];
     
     const newTitle = prompt('Neuer Titel:', moduleToEdit.title);
     const newAreasString = prompt('Neue Bereiche (Komma getrennt):', moduleToEdit.areas.join(', '));
     const newSemester = prompt('Neues Semester:', moduleToEdit.semester);
 
     if (newTitle && newAreasString && newSemester) {
-        modules[index] = { 
+        courses[index] = { 
             title: newTitle,
             areas: newAreasString.split(',').map(area => area.trim()),
             semester: newSemester,
@@ -248,7 +248,7 @@ function editModule(index) {
 // Speichern in Local Storage
 function saveToLocalStorage() {
     localStorage.setItem('areas', JSON.stringify(areas));
-    localStorage.setItem('modules', JSON.stringify(modules));
+    localStorage.setItem('modules', JSON.stringify(courses));
 }
 
 // Laden aus Local Storage
@@ -261,7 +261,7 @@ function loadFromLocalStorage() {
     }
     
     if (storedModules) {
-        modules.push(...JSON.parse(storedModules));
+        courses.push(...JSON.parse(storedModules));
     }
 }
 
@@ -271,3 +271,30 @@ window.onload = () => {
     renderAreas(); // Initiales Rendern
     lucide.createIcons();
 };
+
+// Save to file
+async function saveToFile() {
+    const data = {
+        areas: areas,
+        modules: modules
+    };
+
+    const options = {
+        types: [{
+            description: 'JSON Files',
+            accept: {
+                'application/json': ['.json']
+            }
+        }]
+    };
+
+    try {
+        const handle = await window.showSaveFilePicker(options);
+        const writable = await handle.createWritable();
+        await writable.write(JSON.stringify(data, null, 2));
+        await writable.close();
+        console.log('Data saved to file successfully.');
+    } catch (error) {
+        console.error('Error saving to file:', error);
+    }
+}
