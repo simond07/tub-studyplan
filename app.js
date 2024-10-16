@@ -1,6 +1,15 @@
 let areas = [];
 let modules = [];
 
+// Function to choose a color from the Tailwind colors for each semester
+function generateColor(semester) {
+    const tailwindColors = [
+        'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 
+        'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
+    ];
+    return tailwindColors[semester % tailwindColors.length];
+}
+
 // Bereiche rendern
 function renderAreas() {
     const areasContainer = document.getElementById('areasContainer');
@@ -107,7 +116,7 @@ function renderAreas() {
     // Module nach Semestern rendern
     for (const [semester, modules] of Object.entries(modulesBySemester)) {
         const semesterDiv = document.createElement('div');
-        semesterDiv.className = 'semester-group';
+        semesterDiv.className = `p-2 rounded-md shadow mb-4 ${generateColor(semester)}/30`;
 
         const semesterTitle = document.createElement('h3');
         semesterTitle.innerText = `Semester ${semester}`;
