@@ -13,33 +13,150 @@
         <h1 class="text-3xl font-bold mb-4">Semesterplan Visualisierung</h1>
 
         <!-- Bereich hinzufügen -->
-        <form id="addAreaForm">
-            <div class="mb-4">
-                <input id="areaInput" type="text" placeholder="Bereich hinzufügen" class="border p-2 mr-2">
-                <button type="submit" class="bg-green-500 text-white p-2 rounded">Bereich hinzufügen</button>
-            </div>
-        </form>
-
-        <!-- Module hinzufügen -->
-        <form id="addModuleForm">
-            <div class="mb-4 gap-2 flex flex-wrap">
-                <input id="moduleTitleInput" type="text" placeholder="Modultitel" class="border p-2 mr-2">
-                <select id="moduleAreaSelect" class="border p-2 mr-2">
-                    <option value="">Bereich auswählen</option>
-                </select>
-                <input id="moduleSemesterInput" type="number" placeholder="Semester" class="border p-2 mr-2">
-                <button type="submit" class="bg-blue-500 text-white p-2 rounded">Modul hinzufügen</button>
-            </div>
-        </form>
-
-        <!-- Bereichsübersicht -->
-        <div id="areasContainer" class="flex gap-4">
-            <!-- Bereiche und Module werden hier angezeigt -->
+        <div class="mb-6 bg-white p-4 rounded shadow">
+            <h2 class="text-xl font-semibold mb-3">Bereich hinzufügen</h2>
+            <form id="addAreaForm" class="space-y-3">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                        <label for="areaInput" class="block text-sm font-medium text-gray-700">Bereichsname</label>
+                        <input id="areaInput" type="text" placeholder="Bereich hinzufügen" class="border p-2 w-full rounded">
+                    </div>
+                    <div>
+                        <label for="areaCreditPointsInput" class="block text-sm font-medium text-gray-700">Leistungspunkte (LP)</label>
+                        <input id="areaCreditPointsInput" type="number" min="1" placeholder="LP" class="border p-2 w-full rounded">
+                    </div>
+                    <div>
+                        <label for="parentAreaSelect" class="block text-sm font-medium text-gray-700">Übergeordneter Bereich</label>
+                        <select id="parentAreaSelect" class="border p-2 w-full rounded">
+                            <option value="">Kein Übergeordneter Bereich</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <button type="submit" class="bg-green-500 hover:bg-green-600 text-white p-2 rounded">Bereich hinzufügen</button>
+                </div>
+            </form>
         </div>
 
-        <!-- Semesterübersicht -->
-        <div id="semesterContainer" class="flex gap-4">
-            <!-- Semester wird hier angezeigt -->
+        <!-- Module hinzufügen -->
+        <div class="mb-6 bg-white p-4 rounded shadow">
+            <h2 class="text-xl font-semibold mb-3">Modul hinzufügen</h2>
+            <form id="addModuleForm" class="space-y-3">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                        <label for="moduleTitleInput" class="block text-sm font-medium text-gray-700">Modultitel</label>
+                        <input id="moduleTitleInput" type="text" placeholder="Modultitel" class="border p-2 w-full rounded">
+                    </div>
+                    <div>
+                        <label for="moduleAreaSelect" class="block text-sm font-medium text-gray-700">Bereich</label>
+                        <select id="moduleAreaSelect" class="border p-2 w-full rounded">
+                            <option value="">Bereich auswählen</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="moduleSemesterInput" class="block text-sm font-medium text-gray-700">Semester</label>
+                        <input id="moduleSemesterInput" type="number" min="1" placeholder="Semester" class="border p-2 w-full rounded">
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                        <label for="moduleCreditPointsInput" class="block text-sm font-medium text-gray-700">Leistungspunkte (LP)</label>
+                        <input id="moduleCreditPointsInput" type="number" min="1" placeholder="LP" class="border p-2 w-full rounded">
+                    </div>
+                    <div>
+                        <label for="moduleResponsibleInput" class="block text-sm font-medium text-gray-700">Verantwortlicher</label>
+                        <input id="moduleResponsibleInput" type="text" placeholder="Verantwortlicher" class="border p-2 w-full rounded">
+                    </div>
+                    <div>
+                        <label for="moduleExamTypeInput" class="block text-sm font-medium text-gray-700">Prüfungsform</label>
+                        <input id="moduleExamTypeInput" type="text" placeholder="Prüfungsform" class="border p-2 w-full rounded">
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                        <label for="moduleLanguageSelect" class="block text-sm font-medium text-gray-700">Sprache</label>
+                        <select id="moduleLanguageSelect" class="border p-2 w-full rounded">
+                            <option value="de">Deutsch</option>
+                            <option value="en">Englisch</option>
+                            <option value="de/en">Deutsch/Englisch</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="moduleDepartmentInput" class="block text-sm font-medium text-gray-700">Fachgebiet</label>
+                        <input id="moduleDepartmentInput" type="text" placeholder="Fachgebiet" class="border p-2 w-full rounded">
+                    </div>
+                    <div>
+                        <label for="moduleSemesterOfferedSelect" class="block text-sm font-medium text-gray-700">Turnus</label>
+                        <select id="moduleSemesterOfferedSelect" class="border p-2 w-full rounded">
+                            <option value="SoSe">Sommersemester</option>
+                            <option value="WiSe">Wintersemester</option>
+                            <option value="Beides">Beides</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="moduleDescriptionInput" class="block text-sm font-medium text-gray-700">Beschreibung</label>
+                    <textarea id="moduleDescriptionInput" placeholder="Beschreibung" class="border p-2 w-full rounded" rows="2"></textarea>
+                </div>
+                
+                <div>
+                    <label for="moduleLinkInput" class="block text-sm font-medium text-gray-700">Link</label>
+                    <input id="moduleLinkInput" type="url" placeholder="https://..." class="border p-2 w-full rounded">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Art</label>
+                    <div class="flex flex-wrap gap-4 mt-1">
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" name="moduleType" value="IV" class="form-checkbox h-5 w-5 text-blue-600">
+                            <span class="ml-2">IV</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" name="moduleType" value="VL" class="form-checkbox h-5 w-5 text-blue-600">
+                            <span class="ml-2">VL</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" name="moduleType" value="TUT" class="form-checkbox h-5 w-5 text-blue-600">
+                            <span class="ml-2">TUT</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" name="moduleType" value="UE" class="form-checkbox h-5 w-5 text-blue-600">
+                            <span class="ml-2">UE</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div>
+                    <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded">Modul hinzufügen</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <!-- Bereichsübersicht -->
+            <div>
+                <h2 class="text-xl font-semibold mb-2">Bereichsübersicht</h2>
+                <div id="areasContainer" class="space-y-2">
+                    <!-- Bereiche und Module werden hier angezeigt -->
+                </div>
+            </div>
+
+            <!-- Semesterübersicht -->
+            <div>
+                <h2 class="text-xl font-semibold mb-2">Semesterübersicht</h2>
+                <div id="semesterContainer" class="space-y-2">
+                    <!-- Semester wird hier angezeigt -->
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4">
+            <button onclick="saveToFile()" class="bg-purple-500 hover:bg-purple-600 text-white p-2 rounded">
+                Studienverlaufsplan exportieren
+            </button>
         </div>
     </div>
     <script src="app.js"></script>

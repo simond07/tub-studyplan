@@ -1,7 +1,6 @@
 let areas = [];
 let courses = [];
 
-
 document.getElementById('addAreaForm').addEventListener('submit', function(event) {
     event.preventDefault();
     addArea();
@@ -11,7 +10,6 @@ document.getElementById('addModuleForm').addEventListener('submit', function(eve
     event.preventDefault();
     addModule();
 });
-
 
 // Function to choose a color from the Tailwind colors for each semester
 function generateColor(semester) {
@@ -26,91 +24,146 @@ function generateColor(semester) {
 function renderAreas() {
     const areasContainer = document.getElementById('areasContainer');
     const moduleAreaSelect = document.getElementById('moduleAreaSelect');
+    const parentAreaSelect = document.getElementById('parentAreaSelect');
     const semesterContainer = document.getElementById('semesterContainer');
     
     areasContainer.innerHTML = ''; // Aktuellen Inhalt löschen
     moduleAreaSelect.innerHTML = '<option value="">Bereich auswählen</option>'; // Reset des Select
+    parentAreaSelect.innerHTML = '<option value="">Kein Übergeordneter Bereich</option>'; // Reset des Parent Select
 
-    areas.forEach((area, index) => {
-        const areaDiv = document.createElement('div');
-        areaDiv.className = 'bg-white rounded-md shadow px-2 py-4 mb-4 flex flex-col justify-between gap-2 ';
+    // Funktion zum rekursiven Rendern der Bereiche
+    function renderAreaHierarchy(parentId = null, level = 0) {
+        const filteredAreas = areas.filter(area => area.parentId === parentId);
         
-        const areaHeader = document.createElement('div');
-        areaHeader.className = 'flex justify-between items-center w-full px-2';
-
-        const areaTitle = document.createElement('h2');
-        areaTitle.innerText = area.name;
-        areaTitle.className = 'text-lg font-bold';
-        areaHeader.appendChild(areaTitle);
-
-        const buttonContainer = document.createElement('div');
-        buttonContainer.className = 'flex gap-2 ml-8 items-center';
-
-        // Bearbeiten Button mit Lucide Icon
-        const editButton = document.createElement('button');
-        editButton.innerHTML = '<i data-lucide="edit" class="size-4"></i>';
-        editButton.onclick = () => editArea(index);
-        buttonContainer.appendChild(editButton);
-
-        // Löschen Button mit Lucide Icon
-        const deleteButton = document.createElement('button');
-        deleteButton.innerHTML = '<i data-lucide="trash" class="size-4"></i>';
-        deleteButton.onclick = () => removeArea(index);
-        buttonContainer.appendChild(deleteButton);
-
-        areaHeader.appendChild(buttonContainer);
-
-        areaDiv.appendChild(areaHeader);
-
-        const moduleList = document.createElement('div');
-        
-        const areaModules = courses.filter(module => module.areas.includes(area.name));
-        areaModules.forEach((module, index) => {
-            const moduleDiv = document.createElement('div');
-            moduleDiv.className = 'flex justify-between items-center bg-gray-100 p-2 rounded mb-1';
+        filteredAreas.forEach((area, index) => {
+            // Bereich zum Select hinzufügen
+            const option = document.createElement('option');
+            option.value = area.id;
+            option.textContent = '  '.repeat(level) + area.name + ` (${area.creditPoints} LP)`;
+            moduleAreaSelect.appendChild(option);
             
-            if (module.multipleAreas) {
-                const badge = document.createElement('span');
-                badge.className = 'bg-yellow-300 text-black text-xs font-bold px-1 rounded';
-                badge.innerText = 'Mehrere Bereiche';
-                moduleDiv.appendChild(badge);
-            }
+            // Bereich zum Parent-Select hinzufügen
+            const parentOption = document.createElement('option');
+            parentOption.value = area.id;
+            parentOption.textContent = '  '.repeat(level) + area.name + ` (${area.creditPoints} LP)`;
+            parentAreaSelect.appendChild(parentOption);
 
-            moduleDiv.innerHTML += `<span>${module.title} (Semester: ${module.semester})</span>`;
+            const areaDiv = document.createElement('div');
+            areaDiv.className = 'bg-white rounded-md shadow px-2 py-4 mb-4 flex flex-col justify-between gap-2';
+            areaDiv.style.marginLeft = `${level * 20}px`;
             
-            // Bearbeiten und Entfernen Buttons für Module mit Lucide Icons
-            const modulebuttonContainer = document.createElement('div');
-            modulebuttonContainer.className = 'flex gap-2 ml-8 items-center';
+            const areaHeader = document.createElement('div');
+            areaHeader.className = 'flex justify-between items-center w-full px-2';
+
+            const areaTitle = document.createElement('h2');
+            areaTitle.innerText = `${area.name} (${area.creditPoints} LP)`;
+            areaTitle.className = 'text-lg font-bold';
+            areaHeader.appendChild(areaTitle);
+
+            const buttonContainer = document.createElement('div');
+            buttonContainer.className = 'flex gap-2 ml-8 items-center';
 
             // Bearbeiten Button mit Lucide Icon
-            const moduleEditButton = document.createElement('button');
-            moduleEditButton.innerHTML = '<i data-lucide="edit" class="size-4"></i>';
-            moduleEditButton.onclick = () => editModule(index);
-            modulebuttonContainer.appendChild(moduleEditButton);
+            const editButton = document.createElement('button');
+            editButton.innerHTML = '<i data-lucide="edit" class="size-4"></i>';
+            editButton.onclick = () => editArea(area.id);
+            buttonContainer.appendChild(editButton);
 
             // Löschen Button mit Lucide Icon
             const deleteButton = document.createElement('button');
             deleteButton.innerHTML = '<i data-lucide="trash" class="size-4"></i>';
-            deleteButton.onclick = () => removeModule(index);
-            modulebuttonContainer.appendChild(deleteButton);
+            deleteButton.onclick = () => removeArea(area.id);
+            buttonContainer.appendChild(deleteButton);
 
+            areaHeader.appendChild(buttonContainer);
+            areaDiv.appendChild(areaHeader);
 
-            moduleDiv.appendChild(modulebuttonContainer);
+            // LP-Verbrauch anzeigen
+            const childrenLP = getChildrenTotalLP(area.id);
+            const lpUsageDiv = document.createElement('div');
+            lpUsageDiv.className = 'text-sm px-2';
+            lpUsageDiv.innerHTML = `<span>Verwendet: ${childrenLP} von ${area.creditPoints} LP</span>`;
+            if (childrenLP > area.creditPoints) {
+                lpUsageDiv.classList.add('text-red-500', 'font-bold');
+            }
+            areaDiv.appendChild(lpUsageDiv);
 
-            moduleList.appendChild(moduleDiv);
+            const moduleList = document.createElement('div');
+            
+            const areaModules = courses.filter(module => module.areaId === area.id);
+            areaModules.forEach((module) => {
+                const moduleDiv = document.createElement('div');
+                moduleDiv.className = 'flex justify-between items-center bg-gray-100 p-2 rounded mb-1';
+                
+                const moduleInfo = document.createElement('div');
+                moduleInfo.className = 'flex flex-col';
+                
+                const moduleTitle = document.createElement('span');
+                moduleTitle.className = 'font-medium';
+                moduleTitle.innerText = `${module.title} (${module.creditPoints} LP, Semester: ${module.semester})`;
+                moduleInfo.appendChild(moduleTitle);
+                
+                const moduleDetails = document.createElement('span');
+                moduleDetails.className = 'text-sm text-gray-600';
+                moduleDetails.innerText = `${module.type.join(', ')} | ${module.examType} | ${module.language} | Turnus: ${module.semester_offered}`;
+                moduleInfo.appendChild(moduleDetails);
+                
+                moduleDiv.appendChild(moduleInfo);
+                
+                // Bearbeiten und Entfernen Buttons für Module mit Lucide Icons
+                const moduleButtonContainer = document.createElement('div');
+                moduleButtonContainer.className = 'flex gap-2 ml-8 items-center';
+
+                // Bearbeiten Button mit Lucide Icon
+                const moduleEditButton = document.createElement('button');
+                moduleEditButton.innerHTML = '<i data-lucide="edit" class="size-4"></i>';
+                moduleEditButton.onclick = () => editModule(module.id);
+                moduleButtonContainer.appendChild(moduleEditButton);
+
+                // Löschen Button mit Lucide Icon
+                const moduleDeleteButton = document.createElement('button');
+                moduleDeleteButton.innerHTML = '<i data-lucide="trash" class="size-4"></i>';
+                moduleDeleteButton.onclick = () => removeModule(module.id);
+                moduleButtonContainer.appendChild(moduleDeleteButton);
+
+                moduleDiv.appendChild(moduleButtonContainer);
+                moduleList.appendChild(moduleDiv);
+            });
+
+            areaDiv.appendChild(moduleList);
+            areasContainer.appendChild(areaDiv);
+            
+            // Rekursiv Unterbereiche rendern
+            renderAreaHierarchy(area.id, level + 1);
         });
+    }
+    
+    // Starte mit Top-Level Bereichen (ohne Parent)
+    renderAreaHierarchy(null);
 
-        areaDiv.appendChild(moduleList);
-        areasContainer.appendChild(areaDiv);
+    // Semestercontainer aktualisieren
+    updateSemesterView();
+    
+    // Lucide Icons aktualisieren
+    lucide.createIcons();
+}
 
-        // Bereich im Select hinzufügen
-        const option = document.createElement('option');
-        option.value = area.name;
-        option.textContent = area.name;
-        moduleAreaSelect.appendChild(option);
-    });
+// Berechnet die Summe der LP aller Unterbereiche eines Bereichs
+function getChildrenTotalLP(parentId) {
+    // Direkte Unterbereiche
+    const childAreas = areas.filter(area => area.parentId === parentId);
+    let totalLP = childAreas.reduce((sum, area) => sum + area.creditPoints, 0);
+    
+    // Module, die direkt diesem Bereich zugeordnet sind
+    const directModules = courses.filter(module => module.areaId === parentId);
+    totalLP += directModules.reduce((sum, module) => sum + module.creditPoints, 0);
+    
+    return totalLP;
+}
 
-    // Semester Container leeren
+// Semester-Übersicht aktualisieren
+function updateSemesterView() {
+    const semesterContainer = document.getElementById('semesterContainer');
     semesterContainer.innerHTML = '';
 
     // Module nach Semestern sortieren
@@ -135,37 +188,44 @@ function renderAreas() {
         semesterTitle.className = 'text-xl font-bold mb-2';
         semesterDiv.appendChild(semesterTitle);
 
-        modules.forEach((module, index) => {
+        modules.forEach((module) => {
             const moduleDiv = document.createElement('div');
             moduleDiv.className = 'flex justify-between items-center bg-gray-100 p-2 rounded mb-1';
 
-            if (module.multipleAreas) {
-                const badge = document.createElement('span');
-                badge.className = 'bg-yellow-300 text-black text-xs font-bold px-1 rounded';
-                badge.innerText = 'Mehrere Bereiche';
-                moduleDiv.appendChild(badge);
-            }
+            // Finde den Bereichsnamen für dieses Modul
+            const moduleArea = areas.find(area => area.id === module.areaId);
+            const areaName = moduleArea ? moduleArea.name : "Kein Bereich";
 
-            moduleDiv.innerHTML += `<span>${module.title} (Bereiche: ${module.areas.join(', ')})</span>`;
+            const moduleInfo = document.createElement('div');
+            moduleInfo.className = 'flex flex-col';
+            
+            const moduleTitle = document.createElement('span');
+            moduleTitle.className = 'font-medium';
+            moduleTitle.innerText = `${module.title} (${module.creditPoints} LP)`;
+            moduleInfo.appendChild(moduleTitle);
+            
+            const moduleDetails = document.createElement('span');
+            moduleDetails.className = 'text-sm text-gray-600';
+            moduleDetails.innerText = `Bereich: ${areaName} | ${module.type.join(', ')} | ${module.examType}`;
+            moduleInfo.appendChild(moduleDetails);
+            
+            moduleDiv.appendChild(moduleInfo);
 
-            // Bearbeiten und Entfernen Buttons für Module mit Lucide Icons
-            const modulebuttonContainer = document.createElement('div');
-            modulebuttonContainer.className = 'flex gap-2 ml-8 items-center';
+            // Bearbeiten und Entfernen Buttons für Module
+            const moduleButtonContainer = document.createElement('div');
+            moduleButtonContainer.className = 'flex gap-2 ml-8 items-center';
 
-            // Bearbeiten Button mit Lucide Icon
             const moduleEditButton = document.createElement('button');
-            moduleEditButton.innerHTML = '<i data-lucide="edit" class="size-5"></i>';
-            moduleEditButton.onclick = () => editModule(index);
-            modulebuttonContainer.appendChild(moduleEditButton);
+            moduleEditButton.innerHTML = '<i data-lucide="edit" class="size-4"></i>';
+            moduleEditButton.onclick = () => editModule(module.id);
+            moduleButtonContainer.appendChild(moduleEditButton);
 
-            // Löschen Button mit Lucide Icon
-            const deleteButton = document.createElement('button');
-            deleteButton.innerHTML = '<i data-lucide="trash" class="size-5"></i>';
-            deleteButton.onclick = () => removeModule(index);
-            modulebuttonContainer.appendChild(deleteButton);
+            const moduleDeleteButton = document.createElement('button');
+            moduleDeleteButton.innerHTML = '<i data-lucide="trash" class="size-4"></i>';
+            moduleDeleteButton.onclick = () => removeModule(module.id);
+            moduleButtonContainer.appendChild(moduleDeleteButton);
 
-            moduleDiv.appendChild(modulebuttonContainer);
-
+            moduleDiv.appendChild(moduleButtonContainer);
             semesterDiv.appendChild(moduleDiv);
         });
 
@@ -175,35 +235,126 @@ function renderAreas() {
 
 // Bereich hinzufügen
 function addArea() {
+    console.log("bereich hinzufügen");
     const areaInput = document.getElementById('areaInput');
-    const newAreaName = areaInput.value.trim();
+    const lpInput = document.getElementById('areaCreditPointsInput');
+    const parentSelect = document.getElementById('parentAreaSelect');
     
-    if (newAreaName && !areas.some(area => area.name === newAreaName)) {
-        areas.push({ name: newAreaName });
+    const newAreaName = areaInput.value.trim();
+    const creditPoints = parseInt(lpInput.value) || 0;
+    const parentId = parentSelect.value || null;
+    
+    if (newAreaName && creditPoints > 0) {
+        // Generiere unique ID
+        const areaId = 'area_' + Date.now();
+        
+        areas.push({ 
+            id: areaId,
+            name: newAreaName,
+            creditPoints: creditPoints,
+            parentId: parentId
+        });
+        
         areaInput.value = '';
+        lpInput.value = '';
+        parentSelect.value = '';
+        
         saveToLocalStorage();
         renderAreas();
     }
 }
 
-
 // Bereich bearbeiten
-function editArea(index) {
-    const newAreaName = prompt("Neuer Bereich:", areas[index].name);
+function editArea(areaId) {
+    const areaIndex = areas.findIndex(area => area.id === areaId);
+    if (areaIndex === -1) return;
     
-    if (newAreaName && !areas.some((area, i) => i !== index && area.name === newAreaName)) {
-        areas[index].name = newAreaName;
-        saveToLocalStorage();
-        renderAreas();
+    const area = areas[areaIndex];
+    
+    const newAreaName = prompt("Neuer Bereich:", area.name);
+    if (!newAreaName) return;
+    
+    const newLP = parseInt(prompt("Neue LP-Anzahl:", area.creditPoints));
+    if (isNaN(newLP) || newLP <= 0) return;
+    
+    const possibleParents = areas.filter(a => a.id !== area.id);
+    let parentOptions = "Mögliche Elternbereiche:\n";
+    parentOptions += "0: Kein Elternbereich\n";
+    possibleParents.forEach((p, i) => {
+        parentOptions += `${i+1}: ${p.name}\n`;
+    });
+    
+    const parentChoice = prompt(`${parentOptions}\nElternbereich auswählen (Nummer):`);
+    let newParentId = null;
+    
+    if (parentChoice !== null && parentChoice !== "0") {
+        const choiceIndex = parseInt(parentChoice) - 1;
+        if (!isNaN(choiceIndex) && choiceIndex >= 0 && choiceIndex < possibleParents.length) {
+            // Prüfe auf zirkuläre Abhängigkeit
+            let currentParent = possibleParents[choiceIndex].id;
+            let hasCircular = false;
+            
+            while (currentParent) {
+                if (currentParent === area.id) {
+                    hasCircular = true;
+                    break;
+                }
+                const parentArea = areas.find(a => a.id === currentParent);
+                currentParent = parentArea ? parentArea.parentId : null;
+            }
+            
+            if (hasCircular) {
+                alert("Zirkuläre Abhängigkeit erkannt! Bitte wählen Sie einen anderen Elternbereich.");
+                return;
+            }
+            
+            newParentId = possibleParents[choiceIndex].id;
+        }
     }
+    
+    areas[areaIndex] = {
+        ...area,
+        name: newAreaName,
+        creditPoints: newLP,
+        parentId: newParentId
+    };
+    
+    saveToLocalStorage();
+    renderAreas();
 }
 
 // Bereich entfernen
-function removeArea(index) {
-    areas.splice(index, 1);
+function removeArea(areaId) {
+    // Prüfen, ob dieser Bereich Unterbereiche hat
+    const hasChildren = areas.some(area => area.parentId === areaId);
+    
+    if (hasChildren) {
+        if (!confirm("Dieser Bereich hat Unterbereiche. Möchten Sie trotzdem fortfahren? Alle Unterbereiche werden ebenfalls gelöscht.")) {
+            return;
+        }
+        
+        // Rekursiv alle Unterbereiche entfernen
+        function removeChildAreas(parentId) {
+            const childrenIds = areas.filter(area => area.parentId === parentId).map(a => a.id);
+            childrenIds.forEach(childId => {
+                removeChildAreas(childId);
+                areas = areas.filter(area => area.id !== childId);
+            });
+        }
+        
+        removeChildAreas(areaId);
+    }
+    
+    // Module aktualisieren, die diesem Bereich zugeordnet waren
     courses.forEach(module => {
-        module.areas = module.areas.filter(area => area !== areas[index].name);
+        if (module.areaId === areaId) {
+            module.areaId = null;
+        }
     });
+    
+    // Bereich entfernen
+    areas = areas.filter(area => area.id !== areaId);
+    
     saveToLocalStorage();
     renderAreas();
 }
@@ -213,50 +364,132 @@ function addModule() {
     const titleInput = document.getElementById('moduleTitleInput');
     const areaSelect = document.getElementById('moduleAreaSelect');
     const semesterInput = document.getElementById('moduleSemesterInput');
+    const creditPointsInput = document.getElementById('moduleCreditPointsInput');
+    const descriptionInput = document.getElementById('moduleDescriptionInput');
+    const linkInput = document.getElementById('moduleLinkInput');
+    const responsibleInput = document.getElementById('moduleResponsibleInput');
+    const examTypeInput = document.getElementById('moduleExamTypeInput');
+    const languageSelect = document.getElementById('moduleLanguageSelect');
+    const departmentInput = document.getElementById('moduleDepartmentInput');
+    const semesterOfferedSelect = document.getElementById('moduleSemesterOfferedSelect');
+    
+    // Checkboxen für Modultyp auslesen
+    const typeCheckboxes = document.querySelectorAll('input[name="moduleType"]:checked');
+    const selectedTypes = Array.from(typeCheckboxes).map(cb => cb.value);
 
     const title = titleInput.value.trim();
-    const selectedArea = areaSelect.value;
-    const semester = semesterInput.value.trim();
+    const areaId = areaSelect.value;
+    const semester = parseInt(semesterInput.value);
+    const creditPoints = parseInt(creditPointsInput.value) || 0;
+    const description = descriptionInput.value.trim();
+    const link = linkInput.value.trim();
+    const responsible = responsibleInput.value.trim();
+    const examType = examTypeInput.value.trim();
+    const language = languageSelect.value;
+    const department = departmentInput.value.trim();
+    const semesterOffered = semesterOfferedSelect.value;
 
-    if (title && selectedArea && semester) {
-        courses.push({ title, areas: [selectedArea], semester, multipleAreas: false });
+    if (title && areaId && semester > 0 && creditPoints > 0) {
+        // Generiere unique ID
+        const moduleId = 'module_' + Date.now();
         
-        titleInput.value = '';
-        areaSelect.value = '';
-        semesterInput.value = '';
+        courses.push({ 
+            id: moduleId,
+            title, 
+            areaId, 
+            semester,
+            creditPoints,
+            description,
+            link,
+            responsible,
+            examType,
+            language,
+            department,
+            semester_offered: semesterOffered,
+            type: selectedTypes
+        });
+        
+        // Formular zurücksetzen
+        document.getElementById('addModuleForm').reset();
         
         saveToLocalStorage();
         renderAreas();
     }
 }
 
-
 // Modul entfernen
-function removeModule(index) {
-    courses.splice(index, 1);
+function removeModule(moduleId) {
+    courses = courses.filter(module => module.id !== moduleId);
     saveToLocalStorage();
     renderAreas();
 }
 
 // Modul bearbeiten
-function editModule(index) {
-    const moduleToEdit = courses[index];
+function editModule(moduleId) {
+    const moduleIndex = courses.findIndex(module => module.id === moduleId);
+    if (moduleIndex === -1) return;
     
-    const newTitle = prompt('Neuer Titel:', moduleToEdit.title);
-    const newAreasString = prompt('Neue Bereiche (Komma getrennt):', moduleToEdit.areas.join(', '));
-    const newSemester = prompt('Neues Semester:', moduleToEdit.semester);
-
-    if (newTitle && newAreasString && newSemester) {
-        courses[index] = { 
-            title: newTitle,
-            areas: newAreasString.split(',').map(area => area.trim()),
-            semester: newSemester,
-            multipleAreas: newAreasString.split(',').length > 1 
-        };
-        
-        saveToLocalStorage();
-        renderAreas();
+    const module = courses[moduleIndex];
+    
+    // Einfaches Bearbeiten-Modal anzeigen (sollte eigentlich durch ein besseres UI ersetzt werden)
+    const newTitle = prompt('Titel:', module.title);
+    if (!newTitle) return;
+    
+    const newCreditPoints = parseInt(prompt('LP:', module.creditPoints));
+    if (isNaN(newCreditPoints) || newCreditPoints <= 0) return;
+    
+    const newSemester = parseInt(prompt('Semester:', module.semester));
+    if (isNaN(newSemester) || newSemester <= 0) return;
+    
+    const areaOptions = areas.map((area, i) => `${i}: ${area.name}`).join('\n');
+    const areaChoice = prompt(`Bereich auswählen (Nummer):\n${areaOptions}`);
+    let newAreaId = null;
+    
+    if (areaChoice !== null) {
+        const choiceIndex = parseInt(areaChoice);
+        if (!isNaN(choiceIndex) && choiceIndex >= 0 && choiceIndex < areas.length) {
+            newAreaId = areas[choiceIndex].id;
+        }
     }
+    
+    const newDescription = prompt('Beschreibung:', module.description || '');
+    const newLink = prompt('Link:', module.link || '');
+    const newResponsible = prompt('Verantwortlicher:', module.responsible || '');
+    const newExamType = prompt('Prüfungsform:', module.examType || '');
+    const newLanguage = prompt('Sprache (de/en):', module.language || '');
+    const newDepartment = prompt('Fachgebiet:', module.department || '');
+    const newSemesterOffered = prompt('Turnus (SoSe/WiSe/Beides):', module.semester_offered || '');
+    
+    const typeOptions = ['IV', 'VL', 'TUT', 'UE'];
+    const typePrompt = typeOptions.map(type => 
+        `${type} (${module.type && module.type.includes(type) ? 'Ja' : 'Nein'})`
+    ).join('\n');
+    
+    const typeResponse = prompt(`Modultyp (kommagetrennt):\n${typePrompt}`);
+    let newTypes = module.type || [];
+    
+    if (typeResponse) {
+        newTypes = typeResponse.split(',').map(t => t.trim()).filter(t => typeOptions.includes(t));
+    }
+    
+    courses[moduleIndex] = {
+        ...module,
+        title: newTitle,
+        creditPoints: newCreditPoints,
+        semester: newSemester,
+        areaId: newAreaId,
+        description: newDescription || '',
+        link: newLink || '',
+        responsible: newResponsible || '',
+        examType: newExamType || '',
+        language: newLanguage || '',
+        department: newDepartment || '',
+        semester_offered: newSemesterOffered || '',
+        type: newTypes
+    };
+    
+    saveToLocalStorage();
+    renderAreas();
 }
 
 // Speichern in Local Storage
@@ -290,25 +523,45 @@ window.onload = () => {
 async function saveToFile() {
     const data = {
         areas: areas,
-        modules: modules
+        modules: courses
     };
 
-    const options = {
-        types: [{
-            description: 'JSON Files',
-            accept: {
-                'application/json': ['.json']
-            }
-        }]
-    };
+    const jsonString = JSON.stringify(data, null, 2);
 
-    try {
-        const handle = await window.showSaveFilePicker(options);
-        const writable = await handle.createWritable();
-        await writable.write(JSON.stringify(data, null, 2));
-        await writable.close();
-        console.log('Data saved to file successfully.');
-    } catch (error) {
-        console.error('Error saving to file:', error);
+    // Check if the File System Access API is supported
+    if ('showSaveFilePicker' in window) {
+        const options = {
+            types: [{
+                description: 'JSON Files',
+                accept: {
+                    'application/json': ['.json']
+                }
+            }]
+        };
+
+        try {
+            const handle = await window.showSaveFilePicker(options);
+            const writable = await handle.createWritable();
+            await writable.write(jsonString);
+            await writable.close();
+            console.log('Data saved to file successfully.');
+        } catch (error) {
+            console.error('Error saving to file:', error);
+            fallbackSave(jsonString);
+        }
+    } else {
+        // Fallback for browsers that don't support the File System Access API
+        fallbackSave(jsonString);
     }
+}
+
+// Fallback save method using Blob and download attribute
+function fallbackSave(jsonString) {
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'studyplan.json';
+    a.click();
+    URL.revokeObjectURL(url);
 }
