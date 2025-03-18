@@ -18,12 +18,14 @@
             <form id="addAreaForm" class="space-y-3">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
-                        <label for="areaInput" class="block text-sm font-medium text-gray-700">Bereichsname</label>
+                        <label for="areaInput" class="block text-sm font-medium text-gray-700">Bereichsname *</label>
                         <input id="areaInput" type="text" placeholder="Bereich hinzufügen" class="border p-2 w-full rounded">
+                        <p id="areaInputError" class="text-red-500 text-xs mt-1 hidden">Bitte geben Sie einen Bereichsnamen ein.</p>
                     </div>
                     <div>
-                        <label for="areaCreditPointsInput" class="block text-sm font-medium text-gray-700">Leistungspunkte (LP)</label>
-                        <input id="areaCreditPointsInput" type="number" min="1" placeholder="LP" class="border p-2 w-full rounded">
+                        <label for="areaCreditPointsInput" class="block text-sm font-medium text-gray-700">Leistungspunkte (LP) *</label>
+                        <input id="areaCreditPointsInput" type="number" min="1" placeholder="LP" value="6" class="border p-2 w-full rounded">
+                        <p id="areaCreditPointsError" class="text-red-500 text-xs mt-1 hidden">Bitte geben Sie eine positive Anzahl von LP ein.</p>
                     </div>
                     <div>
                         <label for="parentAreaSelect" class="block text-sm font-medium text-gray-700">Übergeordneter Bereich</label>
@@ -44,33 +46,47 @@
             <form id="addModuleForm" class="space-y-3">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
-                        <label for="moduleTitleInput" class="block text-sm font-medium text-gray-700">Modultitel</label>
-                        <input id="moduleTitleInput" type="text" placeholder="Modultitel" class="border p-2 w-full rounded">
+                        <label for="moduleTitleInput" class="block text-sm font-medium text-gray-700">Modultitel *</label>
+                        <div class="relative">
+                            <input id="moduleTitleInput" type="text" placeholder="Modultitel" class="border p-2 w-full rounded">
+                            <div id="moduleDatabase" class="text-xs text-gray-500 mt-1">
+                                <span id="moduleDatabaseCount">0</span> Module in der Datenbank
+                            </div>
+                        </div>
+                        <p id="moduleTitleError" class="text-red-500 text-xs mt-1 hidden">Bitte geben Sie einen Modultitel ein.</p>
                     </div>
                     <div>
-                        <label for="moduleAreaSelect" class="block text-sm font-medium text-gray-700">Bereich</label>
+                        <label for="moduleAreaSelect" class="block text-sm font-medium text-gray-700">Bereich *</label>
                         <select id="moduleAreaSelect" class="border p-2 w-full rounded">
                             <option value="">Bereich auswählen</option>
                         </select>
+                        <p id="moduleAreaError" class="text-red-500 text-xs mt-1 hidden">Bitte wählen Sie einen Bereich aus.</p>
                     </div>
                     <div>
-                        <label for="moduleSemesterInput" class="block text-sm font-medium text-gray-700">Semester</label>
-                        <input id="moduleSemesterInput" type="number" min="1" placeholder="Semester" class="border p-2 w-full rounded">
+                        <label for="moduleSemesterInput" class="block text-sm font-medium text-gray-700">Semester *</label>
+                        <input id="moduleSemesterInput" type="number" min="1" placeholder="Semester" value="1" class="border p-2 w-full rounded">
+                        <p id="moduleSemesterError" class="text-red-500 text-xs mt-1 hidden">Bitte geben Sie ein gültiges Semester ein.</p>
                     </div>
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
-                        <label for="moduleCreditPointsInput" class="block text-sm font-medium text-gray-700">Leistungspunkte (LP)</label>
-                        <input id="moduleCreditPointsInput" type="number" min="1" placeholder="LP" class="border p-2 w-full rounded">
+                        <label for="moduleCreditPointsInput" class="block text-sm font-medium text-gray-700">Leistungspunkte (LP) *</label>
+                        <input id="moduleCreditPointsInput" type="number" min="1" placeholder="LP" value="6" class="border p-2 w-full rounded">
+                        <p id="moduleCreditPointsError" class="text-red-500 text-xs mt-1 hidden">Bitte geben Sie eine positive Anzahl von LP ein.</p>
                     </div>
                     <div>
                         <label for="moduleResponsibleInput" class="block text-sm font-medium text-gray-700">Verantwortlicher</label>
-                        <input id="moduleResponsibleInput" type="text" placeholder="Verantwortlicher" class="border p-2 w-full rounded">
+                        <input id="moduleResponsibleInput" type="text" placeholder="Verantwortlicher (optional)" class="border p-2 w-full rounded">
                     </div>
                     <div>
                         <label for="moduleExamTypeInput" class="block text-sm font-medium text-gray-700">Prüfungsform</label>
-                        <input id="moduleExamTypeInput" type="text" placeholder="Prüfungsform" class="border p-2 w-full rounded">
+                        <select id="moduleExamTypeInput" class="border p-2 w-full rounded">
+                            <option value="schriftlich" selected>Schriftlich</option>
+                            <option value="mündlich">Mündlich</option>
+                            <option value="Projekt">Projekt</option>
+                            <option value="Portfolio">Portfolio</option>
+                        </select>
                     </div>
                 </div>
                 
@@ -78,33 +94,34 @@
                     <div>
                         <label for="moduleLanguageSelect" class="block text-sm font-medium text-gray-700">Sprache</label>
                         <select id="moduleLanguageSelect" class="border p-2 w-full rounded">
-                            <option value="de">Deutsch</option>
+                            <option value="de" selected>Deutsch</option>
                             <option value="en">Englisch</option>
                             <option value="de/en">Deutsch/Englisch</option>
                         </select>
                     </div>
                     <div>
                         <label for="moduleDepartmentInput" class="block text-sm font-medium text-gray-700">Fachgebiet</label>
-                        <input id="moduleDepartmentInput" type="text" placeholder="Fachgebiet" class="border p-2 w-full rounded">
+                        <input id="moduleDepartmentInput" type="text" placeholder="Fachgebiet (optional)" class="border p-2 w-full rounded">
                     </div>
                     <div>
                         <label for="moduleSemesterOfferedSelect" class="block text-sm font-medium text-gray-700">Turnus</label>
                         <select id="moduleSemesterOfferedSelect" class="border p-2 w-full rounded">
                             <option value="SoSe">Sommersemester</option>
                             <option value="WiSe">Wintersemester</option>
-                            <option value="Beides">Beides</option>
+                            <option value="Beides" selected>Beides</option>
+                            <option value="" selected>k.A.</option>
                         </select>
                     </div>
                 </div>
                 
                 <div>
                     <label for="moduleDescriptionInput" class="block text-sm font-medium text-gray-700">Beschreibung</label>
-                    <textarea id="moduleDescriptionInput" placeholder="Beschreibung" class="border p-2 w-full rounded" rows="2"></textarea>
+                    <textarea id="moduleDescriptionInput" placeholder="Beschreibung (optional)" class="border p-2 w-full rounded" rows="2"></textarea>
                 </div>
                 
                 <div>
                     <label for="moduleLinkInput" class="block text-sm font-medium text-gray-700">Link</label>
-                    <input id="moduleLinkInput" type="url" placeholder="https://..." class="border p-2 w-full rounded">
+                    <input id="moduleLinkInput" type="url" placeholder="https://... (optional)" class="border p-2 w-full rounded">
                 </div>
                 
                 <div>
@@ -153,12 +170,52 @@
             </div>
         </div>
         
-        <div class="mt-4">
-            <button onclick="saveToFile()" class="bg-purple-500 hover:bg-purple-600 text-white p-2 rounded">
-                Studienverlaufsplan exportieren
+        <!-- Modul-Datenbank -->
+        <div class="mb-6 bg-white p-4 rounded shadow">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-xl font-semibold">Modul-Datenbank</h2>
+                <span class="text-sm text-gray-600"><span id="moduleDatabaseCount">0</span> Module verfügbar</span>
+            </div>
+            <div class="overflow-x-auto mt-2">
+                <table class="min-w-full border-collapse">
+                    <thead>
+                        <tr class="bg-gray-50">
+                            <th class="border p-2 text-left">Titel</th>
+                            <th class="border p-2 text-left">LP</th>
+                            <th class="border p-2 text-left">Prüfungsform</th>
+                            <th class="border p-2 text-left">Turnus</th>
+                            <th class="border p-2 text-left">Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="moduleDatabaseTable">
+                        <tr>
+                            <td class="border p-2" colspan="5">Keine Module in der Datenbank</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="mt-4 flex flex-wrap gap-2">
+            <button id="exportButton" onclick="saveToFile()" class="bg-purple-500 hover:bg-purple-600 text-white p-2 rounded">
+                <i class="fas fa-file-export mr-1"></i>Studienverlaufsplan exportieren
             </button>
+            <button id="importButton" class="bg-purple-700 hover:bg-purple-800 text-white p-2 rounded">
+                <i class="fas fa-file-import mr-1"></i>Studienverlaufsplan importieren
+            </button>
+            <a href="module-scraper.html" class="bg-teal-500 hover:bg-teal-600 text-white p-2 rounded inline-block">
+                <i class="fas fa-download mr-1"></i>Module aus TU Berlin importieren
+            </a>
+            <!-- <button id="exportDatabaseButton" class="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded">
+                <i class="fas fa-database mr-1"></i>Moduldatenbank exportieren
+            </button>
+            <button id="importDatabaseButton" class="bg-blue-700 hover:bg-blue-800 text-white p-2 rounded">
+                <i class="fas fa-upload mr-1"></i>Moduldatenbank importieren
+            </button> -->
         </div>
     </div>
+    <script src="module-database.js"></script>
+    <script src="import-export.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

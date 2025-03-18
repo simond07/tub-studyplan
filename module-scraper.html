@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <title>TU Berlin Modul Scraper</title>
+</head>
+<body class="bg-neutral-50">
+    <div class="container mx-auto p-4">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-3xl font-bold">TU Berlin Modul Scraper</h1>
+            <button id="backButton" class="bg-gray-500 hover:bg-gray-600 text-white p-2 rounded">
+                <i class="fas fa-arrow-left mr-2"></i>Zurück zum Studienverlaufsplan
+            </button>
+        </div>
+
+        <div class="mb-6 bg-white p-4 rounded shadow">
+            <h2 class="text-xl font-semibold mb-3">Module aus TU Berlin Webseite einlesen</h2>
+            
+            <div class="space-y-4">
+                <div class="form-group">
+                    <label class="block text-sm font-medium text-gray-700">HTML Inhalt einfügen:</label>
+                    <p class="text-sm text-gray-600 mb-2">
+                        Gehen Sie zur TU Berlin Studiengangsseite, öffnen Sie einen Bereich mit Modulen, 
+                        und kopieren Sie das HTML der Seite hier hinein.
+                    </p>
+                    <textarea id="htmlInput" rows="8" placeholder="HTML hier einfügen..." class="border p-2 w-full rounded"></textarea>
+                </div>
+
+                <div class="flex gap-2">
+                    <button id="scrapeBtn" class="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded">
+                        <i class="fas fa-search mr-2"></i>Module aus HTML einlesen
+                    </button>
+                    <button id="saveModulesBtn" class="bg-green-500 hover:bg-green-600 text-white p-2 rounded" disabled>
+                        <i class="fas fa-save mr-2"></i>Module speichern
+                    </button>
+                    <button id="clearBtn" class="bg-red-500 hover:bg-red-600 text-white p-2 rounded">
+                        <i class="fas fa-trash mr-2"></i>Tabelle leeren
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="scrapingStatus" class="p-3 my-3 rounded hidden"></div>
+
+        <div id="moduleList" class="bg-white p-4 rounded shadow">
+            <h2 class="text-xl font-semibold mb-3">Modul-Datenbank</h2>
+            <div class="flex items-center justify-between mb-4">
+                <p id="moduleCount" class="text-sm text-gray-600">Noch keine Module eingelesen</p>
+                <div class="flex gap-2">
+                    <button id="applyAreasBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-sm hidden">
+                        <i class="fas fa-link mr-1"></i>Bereiche zuordnen
+                    </button>
+                    <button id="exportDatabaseBtn" class="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-sm">
+                        <i class="fas fa-file-export mr-1"></i>Datenbank exportieren
+                    </button>
+                    <button id="importDatabaseBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-sm">
+                        <i class="fas fa-file-import mr-1"></i>Datenbank importieren
+                    </button>
+                    <button id="deleteAllBtn" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-sm">
+                        <i class="fas fa-trash-alt mr-1"></i>Alle Module löschen
+                    </button>
+                </div>
+            </div>
+            <div class="mt-3">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50">
+                                <th class="border p-2 text-left">ID</th>
+                                <th class="border p-2 text-left">Titel</th>
+                                <th class="border p-2 text-left">LP</th>
+                                <th class="border p-2 text-left">Prüfungsform</th>
+                                <th class="border p-2 text-left">Sprache</th>
+                                <th class="border p-2 text-left">Turnus</th>
+                                <th class="border p-2 text-left">Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modulesTableBody">
+                            <tr>
+                                <td class="border p-2" colspan="7">Noch keine Daten vorhanden</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Module Edit Modal -->
+        <div id="editModuleModal" class="fixed inset-0 bg-gray-800 bg-opacity-50 hidden flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 w-full max-w-2xl">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold">Modul bearbeiten</h3>
+                    <button id="closeModalBtn" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="editModuleForm" class="space-y-4">
+                    <input type="hidden" id="editModuleId">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="editModuleTitle" class="block text-sm font-medium text-gray-700">Titel*</label>
+                            <input type="text" id="editModuleTitle" class="border p-2 w-full rounded" required>
+                        </div>
+                        <div>
+                            <label for="editModuleLP" class="block text-sm font-medium text-gray-700">Leistungspunkte*</label>
+                            <input type="number" id="editModuleLP" min="1" class="border p-2 w-full rounded" required>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="editModuleExamType" class="block text-sm font-medium text-gray-700">Prüfungsform</label>
+                            <select id="editModuleExamType" class="border p-2 w-full rounded">
+                                <option value="schriftlich">Schriftlich</option>
+                                <option value="mündlich">Mündlich</option>
+                                <option value="Projekt">Projekt</option>
+                                <option value="Portfolio">Portfolio</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="editModuleLanguage" class="block text-sm font-medium text-gray-700">Sprache</label>
+                            <select id="editModuleLanguage" class="border p-2 w-full rounded">
+                                <option value="de">Deutsch</option>
+                                <option value="en">Englisch</option>
+                                <option value="de/en">Deutsch/Englisch</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="editModuleTurnus" class="block text-sm font-medium text-gray-700">Turnus</label>
+                        <select id="editModuleTurnus" class="border p-2 w-full rounded">
+                            <option value="SoSe">Sommersemester</option>
+                            <option value="WiSe">Wintersemester</option>
+                            <option value="Beides">Beides</option>
+                            <option value="">Keine Angabe</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="editModuleArea" class="block text-sm font-medium text-gray-700">Bereich</label>
+                        <input type="text" id="editModuleArea" class="border p-2 w-full rounded" placeholder="Bereich zuordnen">
+                    </div>
+                    <div>
+                        <label for="editModuleLink" class="block text-sm font-medium text-gray-700">Link</label>
+                        <input type="url" id="editModuleLink" placeholder="https://..." class="border p-2 w-full rounded">
+                    </div>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" id="cancelEditBtn" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Abbrechen</button>
+                        <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Speichern</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script src="module-database.js"></script>
+    <script src="import-export.js"></script>
+    <script src="module-scraper.js"></script>
+</body>
+</html>
