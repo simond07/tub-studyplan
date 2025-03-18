@@ -1,14 +1,117 @@
 let areas = [];
 let courses = [];
 
-document.getElementById('addAreaForm').addEventListener('submit', function(event) {
-    event.preventDefault();
-    addArea();
-});
+// Clean area name function - removes any IDs or special characters
+function cleanAreaName(name) {
+    if (!name) return '';
+    return name.replace(/\s*\(\d+\s*LP\)$/, '') // Remove LP count
+              .replace(/_\d+$/, '') // Remove trailing IDs
+              .replace(/area_\d+_/, '') // Remove area prefix IDs
+              .trim()
+              .toLowerCase();
+}
 
-document.getElementById('addModuleForm').addEventListener('submit', function(event) {
-    event.preventDefault();
-    addModule();
+// Save area to database for reuse
+function saveAreaToDatabase(areaName, creditPoints) {
+    try {
+        const storedAreas = JSON.parse(localStorage.getItem('storedAreas') || '[]');
+        
+        // Check if area already exists
+        const existingAreaIndex = storedAreas.findIndex(area => 
+            cleanAreaName(area.name) === cleanAreaName(areaName)
+        );
+        
+        if (existingAreaIndex >= 0) {
+            // Update existing area
+            storedAreas[existingAreaIndex].creditPoints = creditPoints;
+        } else {
+            // Add new area
+            storedAreas.push({
+                name: areaName,
+                creditPoints: creditPoints
+            });
+        }
+        
+        localStorage.setItem('storedAreas', JSON.stringify(storedAreas));
+        return true;
+    } catch (error) {
+        console.error('Error saving area to database:', error);
+        return false;
+    }
+}
+
+// Store responsible persons and departments
+let responsiblePersons = [];
+let departments = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('addAreaForm').addEventListener('submit', function(event) {
+        event.preventDefault();
+        addArea();
+    });
+
+    document.getElementById('addModuleForm').addEventListener('submit', function(event) {
+        event.preventDefault();
+        addModule();
+    });
+
+    // Set default values for forms
+    document.getElementById('areaCreditPointsInput').value = '6';
+    document.getElementById('moduleExamTypeInput').value = 'schriftlich';
+    document.getElementById('moduleLanguageSelect').value = 'de';
+    document.getElementById('moduleSemesterOfferedSelect').value = 'Beides';
+    document.getElementById('moduleSemesterInput').value = '1';
+    document.getElementById('moduleCreditPointsInput').value = '6';
+    
+    // Initialize data
+    loadFromLocalStorage();
+    setupAreaAutocomplete();
+    setupModuleAutocomplete();
+    setupResponsibleAutocomplete();
+    setupDepartmentAutocomplete();
+    updateModuleDatabaseCount();
+    updateModuleDatabaseTable();
+    renderAreas(); // Initiales Rendern
+    
+    // Initialize import/export buttons
+    const importButton = document.getElementById('importButton');
+    if (importButton) {
+        importButton.addEventListener('click', importStudyPlan);
+    }
+
+    // Initialize modal event listeners
+    const areaEditModal = document.getElementById('areaEditModal');
+    const moduleEditModal = document.getElementById('moduleEditModal');
+    
+    if (areaEditModal) {
+        areaEditModal.addEventListener('click', function(e) {
+            if (e.target === this) closeAreaEditModal();
+        });
+        
+        document.getElementById('closeAreaModalBtn').onclick = closeAreaEditModal;
+        document.getElementById('cancelAreaEditBtn').onclick = closeAreaEditModal;
+        
+        document.getElementById('editAreaForm').onsubmit = function(e) {
+            e.preventDefault();
+            saveAreaEditChanges();
+        };
+    }
+    
+    if (moduleEditModal) {
+        moduleEditModal.addEventListener('click', function(e) {
+            if (e.target === this) closeModuleEditModal();
+        });
+        
+        document.getElementById('closeModuleModalBtn').onclick = closeModuleEditModal;
+        document.getElementById('cancelModuleEditBtn').onclick = closeModuleEditModal;
+        
+        document.getElementById('editModuleForm').onsubmit = function(e) {
+            e.preventDefault();
+            saveModuleEditChanges();
+        };
+    }
+    
+    lucide.createIcons();
 });
 
 // Function to choose a color from the Tailwind colors for each semester
@@ -255,7 +358,7 @@ function updateSemesterView() {
     }
 }
 
-// Bereich hinzufügen
+// Bereich hinzufügen - with duplicate checking and area name cleaning
 function addArea() {
     const areaInput = document.getElementById('areaInput');
     const lpInput = document.getElementById('areaCreditPointsInput');
@@ -284,8 +387,21 @@ function addArea() {
     }
     
     if (isValid) {
-        // Generiere unique ID
-        const areaId = 'area_' + Date.now();
+        // Check if area with same name already exists
+        const existingArea = areas.find(area => 
+            cleanAreaName(area.name) === cleanAreaName(newAreaName)
+        );
+        
+        if (existingArea) {
+            if (confirm(`Bereich "${existingArea.name}" existiert bereits. Möchten Sie diesen Bereich bearbeiten?`)) {
+                editArea(existingArea.id);
+                return;
+            }
+        }
+        
+        // Generiere unique ID ohne zufällige Nummern
+        const cleanName = cleanAreaName(newAreaName).replace(/\s+/g, '_');
+        const areaId = 'area_' + cleanName;
         
         areas.push({ 
             id: areaId,
@@ -293,6 +409,9 @@ function addArea() {
             creditPoints: creditPoints,
             parentId: parentId
         });
+        
+        // Also save to database for future use
+        saveAreaToDatabase(newAreaName, creditPoints);
         
         areaInput.value = '';
         lpInput.value = '6'; // Reset to default value
@@ -303,63 +422,92 @@ function addArea() {
     }
 }
 
-// Bereich bearbeiten
+// Bereich bearbeiten with improved modal
 function editArea(areaId) {
     const areaIndex = areas.findIndex(area => area.id === areaId);
     if (areaIndex === -1) return;
     
     const area = areas[areaIndex];
     
-    const newAreaName = prompt("Neuer Bereich:", area.name);
-    if (!newAreaName) return;
+    // Use the modal instead of prompts
+    openAreaEditModal(area);
+}
+
+function openAreaEditModal(area) {
+    // Fill the form fields
+    document.getElementById('editAreaId').value = area.id;
+    document.getElementById('editAreaName').value = area.name;
+    document.getElementById('editAreaLP').value = area.creditPoints;
     
-    const newLP = parseInt(prompt("Neue LP-Anzahl:", area.creditPoints));
-    if (isNaN(newLP) || newLP <= 0) return;
+    // Populate parent options
+    const parentSelect = document.getElementById('editAreaParent');
+    parentSelect.innerHTML = '<option value="">Kein Übergeordneter Bereich</option>';
     
+    // Add all areas except the current one and its children
     const possibleParents = areas.filter(a => a.id !== area.id);
-    let parentOptions = "Mögliche Elternbereiche:\n";
-    parentOptions += "0: Kein Elternbereich\n";
-    possibleParents.forEach((p, i) => {
-        parentOptions += `${i+1}: ${p.name}\n`;
+    possibleParents.forEach((a, i) => {
+        // Check if this would create a circular dependency
+        let currentParent = a.id;
+        let hasCircular = false;
+        
+        while (currentParent) {
+            if (currentParent === area.id) {
+                hasCircular = true;
+                break;
+            }
+            const parentArea = areas.find(pa => pa.id === currentParent);
+            currentParent = parentArea ? parentArea.parentId : null;
+        }
+        
+        if (!hasCircular) {
+            const option = document.createElement('option');
+            option.value = a.id;
+            option.textContent = a.name;
+            option.selected = a.id === area.parentId;
+            parentSelect.appendChild(option);
+        }
     });
     
-    const parentChoice = prompt(`${parentOptions}\nElternbereich auswählen (Nummer):`);
-    let newParentId = null;
+    // Show the modal
+    const modal = document.getElementById('areaEditModal');
+    modal.classList.remove('hidden');
     
-    if (parentChoice !== null && parentChoice !== "0") {
-        const choiceIndex = parseInt(parentChoice) - 1;
-        if (!isNaN(choiceIndex) && choiceIndex >= 0 && choiceIndex < possibleParents.length) {
-            // Prüfe auf zirkuläre Abhängigkeit
-            let currentParent = possibleParents[choiceIndex].id;
-            let hasCircular = false;
+    // Setup event listeners if not already added
+    if (!document.getElementById('closeAreaModalBtn').hasAttribute('data-listener')) {
+        document.getElementById('closeAreaModalBtn').setAttribute('data-listener', 'true');
+        document.getElementById('closeAreaModalBtn').onclick = closeAreaEditModal;
+        document.getElementById('cancelAreaEditBtn').onclick = closeAreaEditModal;
+        
+        document.getElementById('editAreaForm').onsubmit = function(e) {
+            e.preventDefault();
             
-            while (currentParent) {
-                if (currentParent === area.id) {
-                    hasCircular = true;
-                    break;
-                }
-                const parentArea = areas.find(a => a.id === currentParent);
-                currentParent = parentArea ? parentArea.parentId : null;
+            const newName = document.getElementById('editAreaName').value.trim();
+            const newLP = parseInt(document.getElementById('editAreaLP').value);
+            const newParentId = document.getElementById('editAreaParent').value || null;
+            
+            if (newName && newLP > 0) {
+                // Update area
+                areas[areaIndex] = {
+                    ...area,
+                    name: newName,
+                    creditPoints: newLP,
+                    parentId: newParentId
+                };
+                
+                // Also update in the database
+                saveAreaToDatabase(newName, newLP);
+                
+                saveToLocalStorage();
+                renderAreas();
+                closeAreaEditModal();
             }
-            
-            if (hasCircular) {
-                alert("Zirkuläre Abhängigkeit erkannt! Bitte wählen Sie einen anderen Elternbereich.");
-                return;
-            }
-            
-            newParentId = possibleParents[choiceIndex].id;
-        }
+        };
     }
-    
-    areas[areaIndex] = {
-        ...area,
-        name: newAreaName,
-        creditPoints: newLP,
-        parentId: newParentId
-    };
-    
-    saveToLocalStorage();
-    renderAreas();
+}
+
+function closeAreaEditModal() {
+    const modal = document.getElementById('areaEditModal');
+    modal.classList.add('hidden');
 }
 
 // Bereich entfernen
@@ -461,7 +609,7 @@ function addModule() {
     
     if (isValid) {
         // If no module type is selected, default to VL
-        const finalTypes = selectedTypes.length > 0 ? selectedTypes : ['VL'];
+        const finalTypes = selectedTypes.length > 0 ? selectedTypes : [''];
         
         // Generiere unique ID
         const moduleId = 'module_' + Date.now();
@@ -538,6 +686,107 @@ function addModule() {
     }
 }
 
+// Modul bearbeiten with improved modal
+function editModule(moduleId) {
+    const moduleIndex = courses.findIndex(module => module.id === moduleId);
+    if (moduleIndex === -1) return;
+    
+    const module = courses[moduleIndex];
+    
+    // Use the modal instead of prompts
+    openModuleEditModal(module);
+}
+
+function openModuleEditModal(module) {
+    // Fill the form fields
+    document.getElementById('editModuleId').value = module.id;
+    document.getElementById('editModuleTitle').value = module.title;
+    document.getElementById('editModuleLP').value = module.creditPoints;
+    document.getElementById('editModuleSemester').value = module.semester;
+    
+    // Populate area options
+    const areaSelect = document.getElementById('editModuleArea');
+    areaSelect.innerHTML = '<option value="">Bitte wählen</option>';
+    
+    areas.forEach(area => {
+        const option = document.createElement('option');
+        option.value = area.id;
+        option.textContent = area.name;
+        option.selected = area.id === module.areaId;
+        areaSelect.appendChild(option);
+    });
+    
+    // Fill other fields
+    document.getElementById('editModuleExamType').value = module.examType || 'schriftlich';
+    document.getElementById('editModuleLanguage').value = module.language || 'de';
+    document.getElementById('editModuleResponsible').value = module.responsible || '';
+    document.getElementById('editModuleDepartment').value = module.department || '';
+    document.getElementById('editModuleOffered').value = module.semester_offered || '';
+    
+    // Show the modal
+    const modal = document.getElementById('moduleEditModal');
+    modal.classList.remove('hidden');
+    
+    // Setup event listeners if not already added
+    if (!document.getElementById('closeModuleModalBtn').hasAttribute('data-listener')) {
+        document.getElementById('closeModuleModalBtn').setAttribute('data-listener', 'true');
+        document.getElementById('closeModuleModalBtn').onclick = closeModuleEditModal;
+        document.getElementById('cancelModuleEditBtn').onclick = closeModuleEditModal;
+        
+        document.getElementById('editModuleForm').onsubmit = function(e) {
+            e.preventDefault();
+            
+            const newTitle = document.getElementById('editModuleTitle').value.trim();
+            const newLP = parseInt(document.getElementById('editModuleLP').value);
+            const newSemester = parseInt(document.getElementById('editModuleSemester').value);
+            const newAreaId = document.getElementById('editModuleArea').value;
+            const newExamType = document.getElementById('editModuleExamType').value;
+            const newLanguage = document.getElementById('editModuleLanguage').value;
+            const newResponsible = document.getElementById('editModuleResponsible').value.trim();
+            const newDepartment = document.getElementById('editModuleDepartment').value.trim();
+            const newOffered = document.getElementById('editModuleOffered').value;
+            
+            if (newTitle && newLP > 0 && newSemester > 0 && newAreaId) {
+                // Store responsible and department in autocomplete lists
+                if (newResponsible && !responsiblePersons.includes(newResponsible)) {
+                    responsiblePersons.push(newResponsible);
+                    localStorage.setItem('responsiblePersons', JSON.stringify(responsiblePersons));
+                }
+                
+                if (newDepartment && !departments.includes(newDepartment)) {
+                    departments.push(newDepartment);
+                    localStorage.setItem('departments', JSON.stringify(departments));
+                }
+                
+                // Update module
+                courses[moduleIndex] = {
+                    ...module,
+                    title: newTitle,
+                    creditPoints: newLP,
+                    semester: newSemester,
+                    areaId: newAreaId,
+                    examType: newExamType,
+                    language: newLanguage,
+                    responsible: newResponsible,
+                    department: newDepartment,
+                    semester_offered: newOffered
+                };
+                
+                saveToLocalStorage();
+                renderAreas();
+                closeModuleEditModal();
+            }
+        };
+    }
+}
+
+function closeModuleEditModal() {
+    const modal = document.getElementById('moduleEditModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
 // Modul entfernen
 function removeModule(moduleId) {
     courses = courses.filter(module => module.id !== moduleId);
@@ -545,91 +794,80 @@ function removeModule(moduleId) {
     renderAreas();
 }
 
-// Modul bearbeiten
-function editModule(moduleId) {
-    const moduleIndex = courses.findIndex(module => module.id === moduleId);
-    if (moduleIndex === -1) return;
-    
-    const module = courses[moduleIndex];
-    
-    // Einfaches Bearbeiten-Modal anzeigen (sollte eigentlich durch ein besseres UI ersetzt werden)
-    const newTitle = prompt('Titel:', module.title);
-    if (!newTitle) return;
-    
-    const newCreditPoints = parseInt(prompt('LP:', module.creditPoints));
-    if (isNaN(newCreditPoints) || newCreditPoints <= 0) return;
-    
-    const newSemester = parseInt(prompt('Semester:', module.semester));
-    if (isNaN(newSemester) || newSemester <= 0) return;
-    
-    const areaOptions = areas.map((area, i) => `${i}: ${area.name}`).join('\n');
-    const areaChoice = prompt(`Bereich auswählen (Nummer):\n${areaOptions}`);
-    let newAreaId = null;
-    
-    if (areaChoice !== null) {
-        const choiceIndex = parseInt(areaChoice);
-        if (!isNaN(choiceIndex) && choiceIndex >= 0 && choiceIndex < areas.length) {
-            newAreaId = areas[choiceIndex].id;
-        }
-    }
-    
-    const newDescription = prompt('Beschreibung:', module.description || '');
-    const newLink = prompt('Link:', module.link || '');
-    const newResponsible = prompt('Verantwortlicher:', module.responsible || '');
-    const newExamType = prompt('Prüfungsform:', module.examType || '');
-    const newLanguage = prompt('Sprache (de/en):', module.language || '');
-    const newDepartment = prompt('Fachgebiet:', module.department || '');
-    const newSemesterOffered = prompt('Turnus (SoSe/WiSe/Beides/k.A.):', module.semester_offered || '');
-    
-    const typeOptions = ['IV', 'VL', 'TUT', 'UE'];
-    const typePrompt = typeOptions.map(type => 
-        `${type} (${module.type && module.type.includes(type) ? 'Ja' : 'Nein'})`
-    ).join('\n');
-    
-    const typeResponse = prompt(`Modultyp (kommagetrennt):\n${typePrompt}`);
-    let newTypes = module.type || [];
-    
-    if (typeResponse) {
-        newTypes = typeResponse.split(',').map(t => t.trim()).filter(t => typeOptions.includes(t));
-    }
-    
-    courses[moduleIndex] = {
-        ...module,
-        title: newTitle,
-        creditPoints: newCreditPoints,
-        semester: newSemester,
-        areaId: newAreaId,
-        description: newDescription || '',
-        link: newLink || '',
-        responsible: newResponsible || '',
-        examType: newExamType || '',
-        language: newLanguage || '',
-        department: newDepartment || '',
-        semester_offered: newSemesterOffered || '',
-        type: newTypes
-    };
-    
-    saveToLocalStorage();
-    renderAreas();
-}
-
 // Speichern in Local Storage
 function saveToLocalStorage() {
-    localStorage.setItem('areas', JSON.stringify(areas));
-    localStorage.setItem('modules', JSON.stringify(courses));
+    try {
+        // Clean up data before saving
+        const cleanedAreas = areas.map(area => {
+            return {
+                ...area,
+                id: area.id ? area.id : ('area_' + cleanAreaName(area.name).replace(/\s+/g, '_'))
+            };
+        });
+        
+        localStorage.setItem('areas', JSON.stringify(cleanedAreas));
+        localStorage.setItem('modules', JSON.stringify(courses));
+        
+        // Also save responsible persons and departments
+        if (responsiblePersons.length > 0) {
+            localStorage.setItem('responsiblePersons', JSON.stringify(responsiblePersons));
+        }
+        
+        if (departments.length > 0) {
+            localStorage.setItem('departments', JSON.stringify(departments));
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Error saving to localStorage:', error);
+        alert('Fehler beim Speichern: Der lokale Speicher könnte voll sein.');
+        return false;
+    }
 }
 
 // Laden aus Local Storage
 function loadFromLocalStorage() {
-    const storedAreas = localStorage.getItem('areas');
-    const storedModules = localStorage.getItem('modules');
+    try {
+        // Clear arrays first to avoid duplications
+        areas = [];
+        courses = [];
+        responsiblePersons = [];
+        departments = [];
+        
+        const storedAreas = localStorage.getItem('areas');
+        const storedModules = localStorage.getItem('modules');
+        const storedResponsible = localStorage.getItem('responsiblePersons');
+        const storedDepartments = localStorage.getItem('departments');
 
-    if (storedAreas) {
-        areas.push(...JSON.parse(storedAreas));
-    }
-    
-    if (storedModules) {
-        courses.push(...JSON.parse(storedModules));
+        if (storedAreas) {
+            const parsedAreas = JSON.parse(storedAreas);
+            areas = parsedAreas.map(area => {
+                // Ensure ID is properly formatted
+                const cleanName = cleanAreaName(area.name).replace(/\s+/g, '_');
+                return {
+                    ...area,
+                    id: area.id ? area.id : ('area_' + cleanName)
+                };
+            });
+        }
+        
+        if (storedModules) {
+            courses = JSON.parse(storedModules);
+        }
+        
+        if (storedResponsible) {
+            responsiblePersons = JSON.parse(storedResponsible);
+        }
+        
+        if (storedDepartments) {
+            departments = JSON.parse(storedDepartments);
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Error loading from localStorage:', error);
+        alert('Fehler beim Laden der Daten.');
+        return false;
     }
 }
 
@@ -804,23 +1042,228 @@ async function saveToFile() {
 
 // Import study plan from file
 async function importStudyPlan() {
-    const data = await window.importExport.importStudyPlan();
-    
-    if (!data) return; // User cancelled or error
-    
-    if (confirm('Soll der aktuelle Studienplan überschrieben werden? Dies kann nicht rückgängig gemacht werden.')) {
-        // Clear existing data
-        areas = data.areas || [];
-        courses = data.modules || [];
+    try {
+        const data = await window.importExport.importStudyPlan();
         
-        // Save to localStorage
-        saveToLocalStorage();
+        if (!data) return; // User cancelled or error
         
-        // Re-render everything
-        renderAreas();
-        
-        alert('Studienplan erfolgreich importiert!');
+        if (confirm('Soll der aktuelle Studienplan überschrieben werden? Dies kann nicht rückgängig gemacht werden?')) {
+            // Clear existing data
+            areas = data.areas || [];
+            courses = data.modules || [];
+            
+            // Clean up area IDs to ensure consistency
+            areas = areas.map(area => {
+                return {
+                    ...area,
+                    id: area.id ? area.id : ('area_' + cleanAreaName(area.name).replace(/\s+/g, '_'))
+                };
+            });
+            
+            // Save to localStorage
+            saveToLocalStorage();
+            
+            // Re-render everything
+            renderAreas();
+            
+            alert('Studienplan erfolgreich importiert!');
+        }
+    } catch (error) {
+        console.error('Error importing study plan:', error);
+        alert('Fehler beim Importieren: ' + error.message);
     }
+}
+
+// Setup autocomplete for area input
+function setupAreaAutocomplete() {
+    const areaInput = document.getElementById('areaInput');
+    if (!areaInput) return;
+    
+    const storedAreas = JSON.parse(localStorage.getItem('storedAreas') || '[]');
+    const scrapedAreas = JSON.parse(localStorage.getItem('scrapedAreas') || '[]');
+    
+    // Combine stored and scraped areas
+    const allAreas = [...storedAreas];
+    scrapedAreas.forEach(scrapedArea => {
+        if (!allAreas.some(a => cleanAreaName(a.name) === cleanAreaName(scrapedArea.name))) {
+            allAreas.push(scrapedArea);
+        }
+    });
+    
+    // If there are no areas, don't setup autocomplete
+    if (allAreas.length === 0) return;
+    
+    // Add event listener for input changes
+    areaInput.addEventListener('input', function() {
+        const inputValue = this.value.trim().toLowerCase();
+        if (inputValue.length < 2) {
+            hideAreaAutocompleteResults();
+            return;
+        }
+        
+        // Search for matching areas
+        const matches = allAreas.filter(area => 
+            cleanAreaName(area.name).includes(inputValue)
+        );
+        
+        displayAreaAutocompleteResults(matches, inputValue);
+    });
+    
+    // Add a container for autocomplete results if it doesn't exist
+    if (!document.getElementById('areaAutocompleteResults')) {
+        const autocompleteContainer = document.createElement('div');
+        autocompleteContainer.id = 'areaAutocompleteResults';
+        autocompleteContainer.className = 'absolute z-10 bg-white border shadow-lg rounded-md w-full max-h-60 overflow-y-auto hidden';
+        areaInput.parentNode.style.position = 'relative';
+        areaInput.parentNode.appendChild(autocompleteContainer);
+    }
+    
+    // Close autocomplete when clicking outside
+    document.addEventListener('click', function(event) {
+        const resultsContainer = document.getElementById('areaAutocompleteResults');
+        if (resultsContainer && !resultsContainer.contains(event.target) && !areaInput.contains(event.target)) {
+            hideAreaAutocompleteResults();
+        }
+    });
+}
+
+function displayAreaAutocompleteResults(matches, inputValue) {
+    const resultsContainer = document.getElementById('areaAutocompleteResults');
+    
+    if (!matches || !matches.length) {
+        hideAreaAutocompleteResults();
+        return;
+    }
+    
+    resultsContainer.innerHTML = '';
+    resultsContainer.classList.remove('hidden');
+    
+    matches.forEach(area => {
+        const resultItem = document.createElement('div');
+        resultItem.className = 'p-2 hover:bg-gray-100 cursor-pointer border-b';
+        
+        // Highlight the matching part
+        const nameHtml = area.name.replace(
+            new RegExp(inputValue, 'gi'),
+            match => `<strong class="bg-yellow-200">${match}</strong>`
+        );
+        
+        resultItem.innerHTML = `
+            <div class="font-medium">${nameHtml}</div>
+            <div class="text-xs text-gray-600">${area.creditPoints} LP</div>
+        `;
+        
+        resultItem.addEventListener('click', function() {
+            document.getElementById('areaInput').value = area.name;
+            document.getElementById('areaCreditPointsInput').value = area.creditPoints;
+            hideAreaAutocompleteResults();
+        });
+        
+        resultsContainer.appendChild(resultItem);
+    });
+}
+
+function hideAreaAutocompleteResults() {
+    const resultsContainer = document.getElementById('areaAutocompleteResults');
+    if (resultsContainer) {
+        resultsContainer.classList.add('hidden');
+    }
+}
+
+// Setup autocomplete for responsible person input
+function setupResponsibleAutocomplete() {
+    const responsibleInput = document.getElementById('moduleResponsibleInput');
+    if (!responsibleInput || responsiblePersons.length === 0) return;
+    
+    setupAutocompleteFor(responsibleInput, 'responsibleAutocompleteResults', responsiblePersons);
+}
+
+// Setup autocomplete for department input
+function setupDepartmentAutocomplete() {
+    const departmentInput = document.getElementById('moduleDepartmentInput');
+    if (!departmentInput || departments.length === 0) return;
+    
+    setupAutocompleteFor(departmentInput, 'departmentAutocompleteResults', departments);
+}
+
+// Function to close the database module edit modal
+function closeDbModuleEditModal() {
+    const modal = document.getElementById('moduleEditModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+// Function to set up autocomplete for a given input element
+function setupAutocompleteFor(input, resultsId, dataArray) {
+    // Create container for results if needed
+    let resultsContainer = document.getElementById(resultsId);
+    
+    if (!resultsContainer) {
+        resultsContainer = document.createElement('div');
+        resultsContainer.id = resultsId;
+        resultsContainer.className = 'absolute z-10 bg-white border shadow-lg rounded-md w-full max-h-40 overflow-y-auto hidden';
+        input.parentNode.style.position = 'relative';
+        input.parentNode.appendChild(resultsContainer);
+    }
+    
+    // Add event listener for input
+    input.addEventListener('input', function() {
+        const value = this.value.trim().toLowerCase();
+        
+        if (value.length < 2) {
+            resultsContainer.classList.add('hidden');
+            return;
+        }
+        
+        // Filter matches
+        const matches = dataArray.filter(item => 
+            item.toLowerCase().includes(value)
+        );
+        
+        if (!matches.length) {
+            resultsContainer.classList.add('hidden');
+            return;
+        }
+        
+        // Display matches
+        resultsContainer.innerHTML = '';
+        resultsContainer.classList.remove('hidden');
+        
+        matches.forEach(item => {
+            const resultItem = document.createElement('div');
+            resultItem.className = 'p-2 hover:bg-gray-100 cursor-pointer';
+            
+            // Highlight matching part
+            const itemHtml = item.replace(
+                new RegExp(value, 'gi'),
+                match => `<strong class="bg-yellow-200">${match}</strong>`
+            );
+            
+            resultItem.innerHTML = itemHtml;
+            
+            resultItem.addEventListener('click', function() {
+                input.value = item;
+                resultsContainer.classList.add('hidden');
+            });
+            
+            resultsContainer.appendChild(resultItem);
+        });
+    });
+    
+    // Hide results when clicking outside
+    document.addEventListener('click', function(event) {
+        if (!resultsContainer.contains(event.target) && !input.contains(event.target)) {
+            resultsContainer.classList.add('hidden');
+        }
+    });
+}
+
+// Initial load function
+window.onload = () => {
+    // Set default values for forms
+    document.getElementById('areaCreditPointsInput').value = '6';
+    document.getElementById('moduleExamTypeInput').value = 'schriftlich';
 }
 
 // Initiales Laden

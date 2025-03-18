@@ -82,10 +82,14 @@ function fallbackSave(jsonString, filename) {
 // Import study plan from file
 async function importStudyPlan() {
     try {
+        console.log('Starting import process');
         const fileContent = await readFile();
+        console.log('File content received:', fileContent ? 'Yes' : 'No');
+        
         if (!fileContent) return null;
         
         const data = JSON.parse(fileContent);
+        console.log('Parsed data:', data ? 'Success' : 'Failed');
         
         // Validate the data format
         if (!data.areas || !Array.isArray(data.areas) || !data.modules || !Array.isArray(data.modules)) {
@@ -131,62 +135,80 @@ async function importModuleDatabase() {
 
 // Generic read file function
 async function readFile() {
-    // Check if the File System Access API is supported
-    if ('showOpenFilePicker' in window) {
-        try {
-            const options = {
-                types: [{
-                    description: 'JSON Files',
-                    accept: {
-                        'application/json': ['.json']
-                    }
-                }],
-                multiple: false
-            };
-            
-            const [fileHandle] = await window.showOpenFilePicker(options);
-            const file = await fileHandle.getFile();
-            return await file.text();
-        } catch (error) {
-            if (error.name !== 'AbortError') {
-                console.error('Error opening file:', error);
-                alert(`Fehler beim Öffnen der Datei: ${error.message}`);
-            }
-            return null;
-        }
-    } else {
-        // Fallback for browsers that don't support the File System Access API
-        return new Promise((resolve) => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.json';
-            
-            input.onchange = (event) => {
-                const file = event.target.files[0];
-                if (!file) {
-                    resolve(null);
-                    return;
-                }
-                
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = () => {
-                    alert('Fehler beim Lesen der Datei');
-                    resolve(null);
+    try {
+        // Check if the File System Access API is supported
+        if ('showOpenFilePicker' in window) {
+            try {
+                const options = {
+                    types: [{
+                        description: 'JSON Files',
+                        accept: {
+                            'application/json': ['.json']
+                        }
+                    }],
+                    multiple: false
                 };
-                reader.readAsText(file);
-            };
-            
-            // Trigger file selection dialog
-            input.click();
-        });
+                
+                const [fileHandle] = await window.showOpenFilePicker(options);
+                const file = await fileHandle.getFile();
+                return await file.text();
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    console.error('Error opening file:', error);
+                    alert(`Fehler beim Öffnen der Datei: ${error.message}`);
+                }
+                return null;
+            }
+        } else {
+            // Fallback for browsers that don't support the File System Access API
+            return new Promise((resolve) => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                
+                input.onchange = (event) => {
+                    const file = event.target.files[0];
+                    if (!file) {
+                        resolve(null);
+                        return;
+                    }
+                    
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => {
+                        alert('Fehler beim Lesen der Datei');
+                        resolve(null);
+                    };
+                    reader.readAsText(file);
+                };
+                
+                // Trigger file selection dialog
+                document.body.appendChild(input);
+                input.style.display = 'none';
+                input.click();
+                
+                // Remove input after selection
+                setTimeout(() => {
+                    if (document.body.contains(input)) {
+                        document.body.removeChild(input);
+                    }
+                }, 1000);
+            });
+        }
+    } catch (error) {
+        console.error('Error in readFile:', error);
+        alert('Ein Fehler ist beim Lesen der Datei aufgetreten.');
+        return null;
     }
 }
 
-// Make functions available globally
-window.importExport = {
-    exportStudyPlan,
-    exportModuleDatabase,
-    importStudyPlan,
-    importModuleDatabase
-};
+// Make functions available globally - ensure this is executed
+if (typeof window !== 'undefined') {
+    console.log('Setting up import/export utilities');
+    window.importExport = {
+        exportStudyPlan,
+        exportModuleDatabase,
+        importStudyPlan,
+        importModuleDatabase
+    };
+}

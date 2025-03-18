@@ -88,6 +88,53 @@ function updateModuleInDatabase(moduleId, updatedData) {
     return false; // Module not found
 }
 
+// Load stored areas
+function loadStoredAreas() {
+    try {
+        const areas = localStorage.getItem('storedAreas');
+        return areas ? JSON.parse(areas) : [];
+    } catch (error) {
+        console.error('Error loading stored areas:', error);
+        return [];
+    }
+}
+
+// Save a new area
+function saveAreaToDatabase(area) {
+    if (!area || !area.name) return false;
+    
+    const areas = loadStoredAreas();
+    
+    // Clean area name for comparison
+    function cleanAreaName(name) {
+        return name.toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+    
+    // Check if area with same name already exists
+    const existingIndex = areas.findIndex(a => 
+        cleanAreaName(a.name) === cleanAreaName(area.name)
+    );
+    
+    if (existingIndex >= 0) {
+        // Update existing area
+        areas[existingIndex] = {
+            ...areas[existingIndex],
+            ...area
+        };
+    } else {
+        // Add new area
+        areas.push(area);
+    }
+    
+    try {
+        localStorage.setItem('storedAreas', JSON.stringify(areas));
+        return true;
+    } catch (error) {
+        console.error('Error saving area to database:', error);
+        return false;
+    }
+}
+
 // Exports for use in both app.js and module-scraper.js
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -95,7 +142,9 @@ if (typeof module !== 'undefined' && module.exports) {
         saveModuleDatabase,
         addModuleToDatabase,
         removeModuleFromDatabase,
-        updateModuleInDatabase
+        updateModuleInDatabase,
+        loadStoredAreas,
+        saveAreaToDatabase
     };
 } else {
     // Make functions available globally if not in a module environment
@@ -104,6 +153,8 @@ if (typeof module !== 'undefined' && module.exports) {
         saveModuleDatabase,
         addModuleToDatabase,
         removeModuleFromDatabase,
-        updateModuleInDatabase
+        updateModuleInDatabase,
+        loadStoredAreas,
+        saveAreaToDatabase
     };
 }

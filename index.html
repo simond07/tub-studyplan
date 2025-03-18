@@ -10,7 +10,21 @@
 </head>
 <body class="bg-neutral-50">
     <div class="container mx-auto p-4">
-        <h1 class="text-3xl font-bold mb-4">Semesterplan Visualisierung</h1>
+        <div class="flex flex-wrap justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold">Semesterplan Visualisierung</h1>
+            
+            <div class="flex flex-wrap gap-2 mt-2 md:mt-0">
+                <button id="exportButton" onclick="saveToFile()" class="bg-purple-500 hover:bg-purple-600 text-white p-2 rounded">
+                    <i class="fas fa-file-export mr-1"></i>Exportieren
+                </button>
+                <button id="importButton" class="bg-purple-700 hover:bg-purple-800 text-white p-2 rounded">
+                    <i class="fas fa-file-import mr-1"></i>Importieren
+                </button>
+                <a href="module-scraper.html" class="bg-teal-500 hover:bg-teal-600 text-white p-2 rounded inline-block">
+                    <i class="fas fa-download mr-1"></i>TU Berlin Module
+                </a>
+            </div>
+        </div>
 
         <!-- Bereich hinzufügen -->
         <div class="mb-6 bg-white p-4 rounded shadow">
@@ -19,7 +33,10 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
                         <label for="areaInput" class="block text-sm font-medium text-gray-700">Bereichsname *</label>
-                        <input id="areaInput" type="text" placeholder="Bereich hinzufügen" class="border p-2 w-full rounded">
+                        <div class="relative">
+                            <input id="areaInput" type="text" placeholder="Bereich hinzufügen" class="border p-2 w-full rounded">
+                            <div id="areaAutocompleteResults" class="absolute z-10 bg-white border shadow-lg rounded-md w-full max-h-60 overflow-y-auto hidden"></div>
+                        </div>
                         <p id="areaInputError" class="text-red-500 text-xs mt-1 hidden">Bitte geben Sie einen Bereichsnamen ein.</p>
                     </div>
                     <div>
@@ -196,22 +213,139 @@
             </div>
         </div>
         
-        <div class="mt-4 flex flex-wrap gap-2">
-            <button id="exportButton" onclick="saveToFile()" class="bg-purple-500 hover:bg-purple-600 text-white p-2 rounded">
-                <i class="fas fa-file-export mr-1"></i>Studienverlaufsplan exportieren
-            </button>
-            <button id="importButton" class="bg-purple-700 hover:bg-purple-800 text-white p-2 rounded">
-                <i class="fas fa-file-import mr-1"></i>Studienverlaufsplan importieren
-            </button>
-            <a href="module-scraper.html" class="bg-teal-500 hover:bg-teal-600 text-white p-2 rounded inline-block">
-                <i class="fas fa-download mr-1"></i>Module aus TU Berlin importieren
-            </a>
-            <!-- <button id="exportDatabaseButton" class="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded">
-                <i class="fas fa-database mr-1"></i>Moduldatenbank exportieren
-            </button>
-            <button id="importDatabaseButton" class="bg-blue-700 hover:bg-blue-800 text-white p-2 rounded">
-                <i class="fas fa-upload mr-1"></i>Moduldatenbank importieren
-            </button> -->
+        <!-- Area Edit Modal -->
+        <div id="areaEditModal" class="fixed inset-0 bg-gray-800 bg-opacity-50 hidden flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 w-full max-w-2xl">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold">Bereich bearbeiten</h3>
+                    <button id="closeAreaModalBtn" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="editAreaForm" class="space-y-4">
+                    <input type="hidden" id="editAreaId">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="editAreaName" class="block text-sm font-medium text-gray-700">Name*</label>
+                            <input type="text" id="editAreaName" class="border p-2 w-full rounded" required>
+                        </div>
+                        <div>
+                            <label for="editAreaLP" class="block text-sm font-medium text-gray-700">Leistungspunkte*</label>
+                            <input type="number" id="editAreaLP" min="1" class="border p-2 w-full rounded" required>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="editAreaParent" class="block text-sm font-medium text-gray-700">Übergeordneter Bereich</label>
+                        <select id="editAreaParent" class="border p-2 w-full rounded">
+                            <option value="">Kein Übergeordneter Bereich</option>
+                        </select>
+                    </div>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" id="cancelAreaEditBtn" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Abbrechen</button>
+                        <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Speichern</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Module Edit Modal -->
+        <div id="moduleEditModal" class="fixed inset-0 bg-gray-800 bg-opacity-50 hidden flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 w-full max-w-2xl">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold">Modul bearbeiten</h3>
+                    <button id="closeModuleModalBtn" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="editModuleForm" class="space-y-4">
+                    <input type="hidden" id="editModuleId">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="editModuleTitle" class="block text-sm font-medium text-gray-700">Titel*</label>
+                            <input type="text" id="editModuleTitle" class="border p-2 w-full rounded" required>
+                        </div>
+                        <div>
+                            <label for="editModuleLP" class="block text-sm font-medium text-gray-700">Leistungspunkte*</label>
+                            <input type="number" id="editModuleLP" min="1" class="border p-2 w-full rounded" required>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="editModuleSemester" class="block text-sm font-medium text-gray-700">Semester*</label>
+                            <input type="number" id="editModuleSemester" min="1" class="border p-2 w-full rounded" required>
+                        </div>
+                        <div>
+                            <label for="editModuleArea" class="block text-sm font-medium text-gray-700">Bereich*</label>
+                            <select id="editModuleArea" class="border p-2 w-full rounded" required>
+                                <option value="">Bitte wählen</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="editModuleExamType" class="block text-sm font-medium text-gray-700">Prüfungsform</label>
+                            <select id="editModuleExamType" class="border p-2 w-full rounded">
+                                <option value="schriftlich">Schriftlich</option>
+                                <option value="mündlich">Mündlich</option>
+                                <option value="Projekt">Projekt</option>
+                                <option value="Portfolio">Portfolio</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="editModuleLanguage" class="block text-sm font-medium text-gray-700">Sprache</label>
+                            <select id="editModuleLanguage" class="border p-2 w-full rounded">
+                                <option value="de">Deutsch</option>
+                                <option value="en">Englisch</option>
+                                <option value="de/en">Deutsch/Englisch</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="editModuleResponsible" class="block text-sm font-medium text-gray-700">Verantwortlicher</label>
+                            <input type="text" id="editModuleResponsible" class="border p-2 w-full rounded">
+                        </div>
+                        <div>
+                            <label for="editModuleDepartment" class="block text-sm font-medium text-gray-700">Fachgebiet</label>
+                            <input type="text" id="editModuleDepartment" class="border p-2 w-full rounded">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="editModuleOffered" class="block text-sm font-medium text-gray-700">Angeboten</label>
+                        <select id="editModuleOffered" class="border p-2 w-full rounded">
+                            <option value="SoSe">Sommersemester</option>
+                            <option value="WiSe">Wintersemester</option>
+                            <option value="Beides">Beides</option>
+                            <option value="">Keine Angabe</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Art</label>
+                        <div class="flex flex-wrap gap-4 mt-1" id="editModuleTypeContainer">
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" name="editModuleType" value="IV" class="form-checkbox h-5 w-5 text-blue-600">
+                                <span class="ml-2">IV</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" name="editModuleType" value="VL" class="form-checkbox h-5 w-5 text-blue-600">
+                                <span class="ml-2">VL</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" name="editModuleType" value="TUT" class="form-checkbox h-5 w-5 text-blue-600">
+                                <span class="ml-2">TUT</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" name="editModuleType" value="UE" class="form-checkbox h-5 w-5 text-blue-600">
+                                <span class="ml-2">UE</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" id="cancelModuleEditBtn" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Abbrechen</button>
+                        <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Speichern</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
     <script src="module-database.js"></script>
