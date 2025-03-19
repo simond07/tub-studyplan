@@ -137,6 +137,18 @@ function processHtml(html) {
     }
 }
 
+// Clean area name function - added to module-scraper.js
+function cleanAreaName(name) {
+    if (!name) return '';
+    return name.replace(/\s*\(\d+\s*LP\)$/, '') // Remove LP count
+              .replace(/\s+\d+$/, '') // Remove trailing numbers with whitespace before them
+              .replace(/_\d+$/, '') // Remove trailing IDs
+              .replace(/area_\d+_/, '') // Remove area prefix IDs
+              .replace(/\s{2,}/g, ' ') // Replace multiple spaces with single space
+              .trim()
+              .toLowerCase();
+}
+
 function extractAreasFromHTML(doc) {
     // Try to find area information, common patterns in TU Berlin pages
     const areaElements = doc.querySelectorAll('h3, h4, .card h2, .ui-treetable-selectable-node');
@@ -156,13 +168,18 @@ function extractAreasFromHTML(doc) {
             const creditPoints = lpMatch ? parseInt(lpMatch[1]) : 6; // Default to 6 if not found
             
             const areaName = areaText.replace(/\(\d+\s*LP\)/, '').trim();
+            const cleanName = cleanAreaName(areaName);
             
-            // Create a new area if it doesn't exist already
-            if (areaName && !scrapedAreas.some(a => a.name === areaName)) {
+            // Generate a consistent ID for this area
+            const areaId = 'area_' + cleanName.replace(/\s+/g, '_');
+            
+            // Create a new area if it doesn't exist already by comparing clean names
+            if (cleanName && !scrapedAreas.some(a => cleanAreaName(a.name) === cleanName)) {
                 scrapedAreas.push({
+                    id: areaId,
                     name: areaName,
-                    creditPoints: creditPoints,
-                    id: 'area_' + Date.now() + '_' + Math.floor(Math.random() * 1000)
+                    cleanName: cleanName,
+                    creditPoints: creditPoints
                 });
             }
         }
@@ -178,25 +195,38 @@ function extractAreasFromHTML(doc) {
             
             // Process only if it's a meaningful name
             if (nodeName && nodeName.length > 3 && !nodeName.includes('Liste') && !nodeName.includes('Semester')) {
-                scrapedAreas.push({
-                    name: nodeName,
-                    level: level,
-                    creditPoints: 6, // Default value
-                    id: 'area_' + Date.now() + '_' + Math.floor(Math.random() * 1000)
-                });
+                const cleanName = cleanAreaName(nodeName);
+                const areaId = 'area_' + cleanName.replace(/\s+/g, '_');
+                
+                // Only add if not already present
+                if (!scrapedAreas.some(a => cleanAreaName(a.name) === cleanName)) {
+                    scrapedAreas.push({
+                        id: areaId,
+                        name: nodeName,
+                        cleanName: cleanName,
+                        level: level,
+                        creditPoints: 6 // Default value
+                    });
+                }
             }
         });
     }
     
     // Also try to find area information from the page title or headers
     const pageTitle = doc.querySelector('h3')?.textContent.trim();
-    if (pageTitle && !scrapedAreas.some(a => a.name === pageTitle)) {
-        // Add the page title as a potential area
-        scrapedAreas.push({
-            name: pageTitle,
-            creditPoints: 30, // Default reasonable value
-            id: 'area_' + Date.now() + '_' + Math.floor(Math.random() * 1000)
-        });
+    if (pageTitle) {
+        const cleanName = cleanAreaName(pageTitle);
+        const areaId = 'area_' + cleanName.replace(/\s+/g, '_');
+        
+        // Add the page title as a potential area if not already present
+        if (cleanName && !scrapedAreas.some(a => cleanAreaName(a.name) === cleanName)) {
+            scrapedAreas.push({
+                id: areaId,
+                name: pageTitle,
+                cleanName: cleanName,
+                creditPoints: 30 // Default reasonable value
+            });
+        }
     }
     
     // Add a button to apply areas to modules if we found areas
@@ -631,6 +661,7 @@ function showStatus(type, message) {
     statusElement.textContent = message;
 }
 
+// Store scraped areas and their relationship to modules
 function saveModulesToStorage() {
     if (scrapedModules.length === 0) {
         showStatus('warning', 'Keine Module zum Speichern vorhanden.');
@@ -668,20 +699,40 @@ function saveModulesToStorage() {
         showStatus('error', `Fehler beim Speichern: ${error.message}`);
     }
     
-    // Store scraped areas and their relationship to modules
+    // Store scraped areas with proper IDs and clean names
     if (scrapedAreas.length > 0) {
-        const existingAreas = JSON.parse(localStorage.getItem('scrapedAreas') || '[]');
+        // Get existing stored areas
+        const storedAreas = JSON.parse(localStorage.getItem('storedAreas') || '[]');
         
-        // Merge with existing areas, avoid duplicates
-        const mergedAreas = [...existingAreas];
-        
+        // Process each scraped area
         scrapedAreas.forEach(newArea => {
-            if (!mergedAreas.some(a => a.name === newArea.name)) {
-                mergedAreas.push(newArea);
+            const cleanName = cleanAreaName(newArea.name);
+            
+            // Check if this area already exists in stored areas
+            const existingIndex = storedAreas.findIndex(a => 
+                cleanAreaName(a.name) === cleanName
+            );
+            
+            if (existingIndex === -1) {
+                // Area doesn't exist yet, add it with proper ID
+                const areaId = 'area_' + cleanName.replace(/\s+/g, '_');
+                storedAreas.push({
+                    id: areaId,
+                    name: newArea.name.trim(),
+                    creditPoints: newArea.creditPoints || 6
+                });
             }
         });
         
-        localStorage.setItem('scrapedAreas', JSON.stringify(mergedAreas));
+        // Save updated stored areas
+        localStorage.setItem('storedAreas', JSON.stringify(storedAreas));
+        
+        // Also save scraped areas for the current session
+        localStorage.setItem('scrapedAreas', JSON.stringify(scrapedAreas.map(area => ({
+            id: area.id || ('area_' + cleanAreaName(area.name).replace(/\s+/g, '_')),
+            name: area.name.trim(),
+            creditPoints: area.creditPoints
+        }))));
     }
 }
 

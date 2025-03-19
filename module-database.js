@@ -88,6 +88,18 @@ function updateModuleInDatabase(moduleId, updatedData) {
     return false; // Module not found
 }
 
+// Clean area name function - added to module-database.js
+function cleanAreaName(name) {
+    if (!name) return '';
+    return name.replace(/\s*\(\d+\s*LP\)$/, '') // Remove LP count
+              .replace(/\s+\d+$/, '') // Remove trailing numbers with whitespace before them
+              .replace(/_\d+$/, '') // Remove trailing IDs
+              .replace(/area_\d+_/, '') // Remove area prefix IDs
+              .replace(/\s{2,}/g, ' ') // Replace multiple spaces with single space
+              .trim()
+              .toLowerCase();
+}
+
 // Load stored areas
 function loadStoredAreas() {
     try {
@@ -99,31 +111,35 @@ function loadStoredAreas() {
     }
 }
 
-// Save a new area
+// Save a new area - updated for better ID handling
 function saveAreaToDatabase(area) {
     if (!area || !area.name) return false;
     
     const areas = loadStoredAreas();
     
-    // Clean area name for comparison
-    function cleanAreaName(name) {
-        return name.toLowerCase().replace(/\s+/g, ' ').trim();
-    }
+    // Generate clean ID for the area
+    const cleanName = cleanAreaName(area.name);
+    const areaId = area.id || ('area_' + cleanName.replace(/\s+/g, '_'));
     
-    // Check if area with same name already exists
+    // Check if area with same clean name already exists
     const existingIndex = areas.findIndex(a => 
-        cleanAreaName(a.name) === cleanAreaName(area.name)
+        cleanAreaName(a.name) === cleanName
     );
     
     if (existingIndex >= 0) {
         // Update existing area
         areas[existingIndex] = {
             ...areas[existingIndex],
-            ...area
+            creditPoints: area.creditPoints,
+            id: areaId
         };
     } else {
-        // Add new area
-        areas.push(area);
+        // Add new area with ID
+        areas.push({
+            ...area,
+            id: areaId,
+            name: area.name.trim() // Store trimmed original name
+        });
     }
     
     try {

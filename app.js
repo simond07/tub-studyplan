@@ -1,33 +1,40 @@
 let areas = [];
 let courses = [];
 
-// Clean area name function - removes any IDs or special characters
+// Clean area name function - improved to handle trailing numbers and extra whitespace
 function cleanAreaName(name) {
     if (!name) return '';
     return name.replace(/\s*\(\d+\s*LP\)$/, '') // Remove LP count
+              .replace(/\s+\d+$/, '') // Remove trailing numbers with whitespace before them
               .replace(/_\d+$/, '') // Remove trailing IDs
               .replace(/area_\d+_/, '') // Remove area prefix IDs
+              .replace(/\s{2,}/g, ' ') // Replace multiple spaces with single space
               .trim()
               .toLowerCase();
 }
 
-// Save area to database for reuse
+// Save area to database for reuse - updated to use proper IDs
 function saveAreaToDatabase(areaName, creditPoints) {
     try {
         const storedAreas = JSON.parse(localStorage.getItem('storedAreas') || '[]');
         
-        // Check if area already exists
+        // Clean area name for comparison and generate a clean ID
+        const cleanName = cleanAreaName(areaName);
+        const areaId = 'area_' + cleanName.replace(/\s+/g, '_');
+        
+        // Check if area already exists by comparing cleaned names
         const existingAreaIndex = storedAreas.findIndex(area => 
-            cleanAreaName(area.name) === cleanAreaName(areaName)
+            cleanAreaName(area.name) === cleanName
         );
         
         if (existingAreaIndex >= 0) {
             // Update existing area
             storedAreas[existingAreaIndex].creditPoints = creditPoints;
         } else {
-            // Add new area
+            // Add new area with ID
             storedAreas.push({
-                name: areaName,
+                id: areaId,
+                name: areaName.trim(), // Store the original name but trimmed
                 creditPoints: creditPoints
             });
         }
@@ -420,7 +427,7 @@ function updateSemesterView() {
     }
 }
 
-// Bereich hinzufügen - with duplicate checking and area name cleaning
+// Bereich hinzufügen - updated with improved area name cleaning
 function addArea() {
     const areaInput = document.getElementById('areaInput');
     const lpInput = document.getElementById('areaCreditPointsInput');
@@ -449,7 +456,11 @@ function addArea() {
     }
     
     if (isValid) {
-        // Check if area with same name already exists
+        // Generate clean name and ID
+        const cleanName = cleanAreaName(newAreaName).replace(/\s+/g, '_');
+        const areaId = 'area_' + cleanName;
+        
+        // Check if area with same name already exists using cleaned version
         const existingArea = areas.find(area => 
             cleanAreaName(area.name) === cleanAreaName(newAreaName)
         );
@@ -461,13 +472,9 @@ function addArea() {
             }
         }
         
-        // Generiere unique ID ohne zufällige Nummern
-        const cleanName = cleanAreaName(newAreaName).replace(/\s+/g, '_');
-        const areaId = 'area_' + cleanName;
-        
         areas.push({ 
             id: areaId,
-            name: newAreaName,
+            name: newAreaName.trim(), // Store trimmed original name
             creditPoints: creditPoints,
             parentId: parentId
         });
