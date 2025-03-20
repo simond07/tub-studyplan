@@ -5,8 +5,8 @@ This studyplanner can help you to plan your study at TU Berlin. You can import C
 The studyplanner is under devolpment.
 
 ## Planned Features
-[] Automatic import of Classes through a link of your degree from Moses.
-[] Edit the Class Grouping / Bereiche
+- [ ] Automatic import of Classes through a link of your degree from Moses.
+- [ ] Edit the Class Grouping / Bereiche
 
 Feel free to contribute! Any pull requests are welcome.
 
