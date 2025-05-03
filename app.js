@@ -2,6 +2,13 @@ let areas = [];
 let courses = [];
 let responsiblePersons = [];
 let departments = [];
+let dbSortColumn = 'isFavorite'; // Standard: Favoriten oben
+let dbSortDirection = 'desc'; // 'asc' oder 'desc' (desc für Favoriten oben)
+let dbSearchTerm = '';
+let dbSelectedArea = '';
+let dbCurrentAdvancedFilter = null; // Das aktuell angewendete erweiterte Filterobjekt
+let savedDbFilters = []; // Geladene Filter aus localStorage
+let dbShowHidden = false;
 
 // Clean area name function - improved to handle trailing numbers and extra whitespace
 function cleanAreaName(name) {
@@ -74,6 +81,40 @@ document.addEventListener('DOMContentLoaded', function() {
     setupModuleAutocomplete();
     setupResponsibleAutocomplete();
     setupDepartmentAutocomplete();
+
+    // Lade gespeicherte Filter
+    savedDbFilters = window.moduleDatabase.loadDbFilters();
+    populateSavedFiltersDropdown();
+
+    // Event Listener für Filter/Suche/Sortierung
+    const dbSearchInput = document.getElementById('dbSearchInput');
+    const dbAreaFilterSelect = document.getElementById('dbAreaFilterSelect');
+    const dbModuleTableHead = document.querySelector('#moduleDatabaseTable thead');
+    const openFilterBuilderBtn = document.getElementById('openFilterBuilderBtn');
+    const closeFilterBuilderBtn = document.getElementById('closeFilterBuilderBtn');
+    const cancelFilterBuilderBtn = document.getElementById('cancelFilterBuilderBtn');
+    const addFilterConditionBtn = document.getElementById('addFilterConditionBtn');
+    const applyFilterBtn = document.getElementById('applyFilterBtn');
+    const saveAndApplyFilterBtn = document.getElementById('saveAndApplyFilterBtn');
+    const savedFilterSelect = document.getElementById('dbSavedFilterSelect');
+    const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+    const saveCurrentFilterBtn = document.getElementById('saveCurrentFilterBtn'); // Button zum Speichern aktiver Filter
+    const showHiddenCheckbox = document.getElementById('showHiddenDbModules');
+
+    if (showHiddenCheckbox) showHiddenCheckbox.addEventListener('change', handleShowHiddenToggle);
+    if (dbSearchInput) dbSearchInput.addEventListener('input', handleDbSearch);
+    if (dbAreaFilterSelect) dbAreaFilterSelect.addEventListener('change', handleDbAreaFilter);
+    if (dbModuleTableHead) dbModuleTableHead.addEventListener('click', handleDbSort);
+    if (openFilterBuilderBtn) openFilterBuilderBtn.addEventListener('click', openFilterBuilder);
+    if (closeFilterBuilderBtn) closeFilterBuilderBtn.addEventListener('click', closeFilterBuilder);
+    if (cancelFilterBuilderBtn) cancelFilterBuilderBtn.addEventListener('click', closeFilterBuilder);
+    if (addFilterConditionBtn) addFilterConditionBtn.addEventListener('click', addFilterConditionRow);
+    if (applyFilterBtn) applyFilterBtn.addEventListener('click', applyAdvancedFilterFromBuilder);
+    if (saveAndApplyFilterBtn) saveAndApplyFilterBtn.addEventListener('click', saveAndApplyAdvancedFilter);
+    if (savedFilterSelect) savedFilterSelect.addEventListener('change', applySavedFilter);
+    if (clearFiltersBtn) clearFiltersBtn.addEventListener('click', clearAllDbFilters);
+    if (saveCurrentFilterBtn) saveCurrentFilterBtn.addEventListener('click', saveCurrentFilterSetup); // Listener für Speichern-Button
+
     updateModuleDatabaseCount();
     updateModuleDatabaseTable();
     renderAreas(); // Initiales Rendern
@@ -118,6 +159,39 @@ document.addEventListener('DOMContentLoaded', function() {
     
     lucide.createIcons();
 });
+
+function handleShowHiddenToggle(event) {
+    dbShowHidden = event.target.checked;
+    updateModuleDatabaseTable(); // Tabelle neu rendern
+}
+
+function handleDbSearch(event) {
+    dbSearchTerm = event.target.value.trim().toLowerCase();
+    updateModuleDatabaseTable(); // Tabelle neu rendern mit Suchfilter
+}
+
+function handleDbAreaFilter(event) {
+    dbSelectedArea = event.target.value;
+    updateModuleDatabaseTable(); // Tabelle neu rendern mit Bereichsfilter
+}
+
+function handleDbSort(event) {
+    const header = event.target.closest('th[data-sort-by]');
+    if (!header) return;
+
+    const newSortColumn = header.getAttribute('data-sort-by');
+
+    if (newSortColumn === dbSortColumn) {
+        // Richtung umkehren
+        dbSortDirection = dbSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        // Neue Spalte, Standardrichtung ASC (außer für Favorit)
+        dbSortColumn = newSortColumn;
+        dbSortDirection = (newSortColumn === 'isFavorite' || newSortColumn === 'lastUpdated') ? 'desc' : 'asc';
+    }
+
+    updateModuleDatabaseTable(); // Tabelle neu rendern mit neuer Sortierung
+}
 
 // Function to choose a color from the Tailwind colors for each semester
 function generateColor(semester) {
@@ -833,111 +907,100 @@ function editModule(moduleId) {
 
 function openModuleEditModal(module, isDbModule = false) {
     const modal = document.getElementById('moduleEditModal');
-    
-    // Store module type and ID as data attributes on the modal
     modal.setAttribute('data-is-db-module', isDbModule ? 'true' : 'false');
     modal.setAttribute('data-module-id', module.id);
-    
-    // Fill common fields
+
+    // ... (Felder füllen wie zuvor: Title, LP etc.)
     document.getElementById('editModuleId').value = module.id;
     document.getElementById('editModuleTitle').value = module.title;
     document.getElementById('editModuleLP').value = module.creditPoints;
-    
-    // Show different fields based on module type
-    const semesterField = document.getElementById('editModuleSemester');
-    const semesterContainer = semesterField ? semesterField.closest('.grid > div') : null;
-    
+    document.getElementById('editModuleExamType').value = module.examType || 'schriftlich';
+    document.getElementById('editModuleLanguage').value = module.language || 'de';
+    document.getElementById('editModuleOffered').value = module.semester_offered || '';
+
+
+    const semesterContainer = document.getElementById('editModuleSemesterContainer'); // Container verwenden
+    const areaContainer = document.getElementById('editModuleAreaContainer');          // Container verwenden
+    const courseSpecificFields = document.getElementById('editModuleCourseSpecificFields');
+    const typeSpecificContainer = document.getElementById('editModuleTypeSpecificContainer');
+
+
     if (isDbModule) {
-        // Database module - hide semester field
+        // DB-Modul spezifische Felder/Anzeige
         if (semesterContainer) semesterContainer.classList.add('hidden');
-        
-        // For database modules, convert area select to text input if needed
-        const areaField = document.getElementById('editModuleArea');
-        if (areaField && areaField.tagName === 'SELECT') {
-            const areaContainer = areaField.closest('.grid > div');
-            const label = areaContainer.querySelector('label');
-            
-            // Create area text input
-            const areaInput = document.createElement('input');
-            areaInput.type = 'text';
-            areaInput.id = 'editModuleArea';
-            areaInput.className = 'border p-2 w-full rounded';
-            areaInput.placeholder = 'Bereich zuordnen';
-            areaInput.value = module.areaName || '';
-            areaInput.required = false; // Not required for database modules
-            
-            // Replace select with input
-            areaField.parentNode.replaceChild(areaInput, areaField);
-        } else if (areaField && areaField.tagName === 'INPUT') {
-            areaField.value = module.areaName || '';
+        if (courseSpecificFields) courseSpecificFields.classList.add('hidden');
+        if (typeSpecificContainer) typeSpecificContainer.classList.add('hidden');
+        if (areaContainer) areaContainer.classList.remove('hidden'); // Bereich immer anzeigen
+
+        // Bereich als Textfeld für DB-Module
+        let areaInput = areaContainer.querySelector('input[type="text"]');
+        if (!areaInput) {
+            areaContainer.innerHTML = `
+                <label for="editModuleArea" class="block text-sm font-medium text-gray-700">Bereich (DB)</label>
+                <input type="text" id="editModuleArea" class="border p-2 w-full rounded" placeholder="Bereichsname in DB">`;
+            areaInput = areaContainer.querySelector('input[type="text"]');
         }
+        areaInput.value = module.areaName || '';
+
+        // NEU: BaseLink und Version anzeigen/bearbeiten
+        let linkContainer = document.getElementById('editDbModuleLinkContainer');
+        if (!linkContainer) {
+            linkContainer = document.createElement('div');
+            linkContainer.id = 'editDbModuleLinkContainer';
+            linkContainer.className = 'grid grid-cols-1 md:grid-cols-2 gap-4';
+             linkContainer.innerHTML = `
+                 <div>
+                     <label for="editDbModuleBaseLink" class="block text-sm font-medium text-gray-700">Basis-Link</label>
+                     <input type="url" id="editDbModuleBaseLink" class="border p-2 w-full rounded text-sm" placeholder="https://...">
+                 </div>
+                 <div>
+                     <label for="editDbModuleVersion" class="block text-sm font-medium text-gray-700">Version</label>
+                     <input type="text" id="editDbModuleVersion" class="border p-2 w-full rounded text-sm" placeholder="z.B. 2023w">
+                 </div>
+             `;
+             // Füge es vor den Buttons ein
+             const form = document.getElementById('editModuleForm');
+             form.insertBefore(linkContainer, form.lastElementChild); // Vor dem Button-Container
+        }
+         document.getElementById('editDbModuleBaseLink').value = module.baseLink || '';
+         document.getElementById('editDbModuleVersion').value = module.version || '';
+         linkContainer.classList.remove('hidden');
+
+
     } else {
-        // Course module - show semester field
+        // Kurs-Modul spezifische Felder/Anzeige
         if (semesterContainer) semesterContainer.classList.remove('hidden');
-        document.getElementById('editModuleSemester').value = module.semester;
-        
-        // For course modules, convert area input to select if needed
-        const areaField = document.getElementById('editModuleArea');
-        if (areaField && areaField.tagName === 'INPUT') {
-            const areaContainer = areaField.closest('.grid > div');
-            const label = areaContainer.querySelector('label');
-            
-            // Create area select
-            const areaSelect = document.createElement('select');
-            areaSelect.id = 'editModuleArea';
-            areaSelect.className = 'border p-2 w-full rounded';
-            areaSelect.required = true;
-            
-            // Add options
-            areaSelect.innerHTML = '<option value="">Bitte wählen</option>';
-            areas.forEach(area => {
-                const option = document.createElement('option');
-                option.value = area.id;
-                option.textContent = area.name;
-                option.selected = area.id === module.areaId;
-                areaSelect.appendChild(option);
-            });
-            
-            // Replace input with select
-            areaField.parentNode.replaceChild(areaSelect, areaField);
-        } else if (areaField && areaField.tagName === 'SELECT') {
-            // Update options in existing select
-            areaField.innerHTML = '<option value="">Bitte wählen</option>';
-            areas.forEach(area => {
-                const option = document.createElement('option');
-                option.value = area.id;
-                option.textContent = area.name;
-                option.selected = area.id === module.areaId;
-                areaField.appendChild(option);
-            });
+        if (courseSpecificFields) courseSpecificFields.classList.remove('hidden');
+        if (typeSpecificContainer) typeSpecificContainer.classList.remove('hidden');
+        if (areaContainer) areaContainer.classList.remove('hidden'); // Bereich immer anzeigen
+         // Link Container ausblenden
+         document.getElementById('editDbModuleLinkContainer')?.classList.add('hidden');
+
+
+        // Bereich als Select für Kursmodule
+        let areaSelect = areaContainer.querySelector('select');
+        if (!areaSelect) {
+            areaContainer.innerHTML = `
+                 <label for="editModuleArea" class="block text-sm font-medium text-gray-700">Bereich*</label>
+                 <select id="editModuleArea" class="border p-2 w-full rounded" required>
+                     <option value="">Bitte wählen</option>
+                     <!-- Optionen via JS -->
+                 </select>`;
+            areaSelect = areaContainer.querySelector('select');
         }
+         populateAreaSelect(areaSelect, true, null, module.areaId); // Befülle mit Plan-Bereichen
+
+        // Semester und andere Kurs-Felder
+         document.getElementById('editModuleSemester').value = module.semester;
+         document.getElementById('editModuleResponsible').value = module.responsible || '';
+         document.getElementById('editModuleDepartment').value = module.department || '';
+         // Checkboxen für Typ
+         const typeCheckboxes = document.querySelectorAll('input[name="editModuleType"]');
+         typeCheckboxes.forEach(cb => {
+            cb.checked = module.type && module.type.includes(cb.value);
+         });
     }
-    
-    // Fill other common fields
-    if (document.getElementById('editModuleExamType')) 
-        document.getElementById('editModuleExamType').value = module.examType || 'schriftlich';
-    if (document.getElementById('editModuleLanguage')) 
-        document.getElementById('editModuleLanguage').value = module.language || 'de';
-    if (document.getElementById('editModuleOffered')) 
-        document.getElementById('editModuleOffered').value = module.semester_offered || '';
-    
-    // Fill in course-specific fields if they exist
-    if (!isDbModule) {
-        if (document.getElementById('editModuleResponsible')) 
-            document.getElementById('editModuleResponsible').value = module.responsible || '';
-        if (document.getElementById('editModuleDepartment')) 
-            document.getElementById('editModuleDepartment').value = module.department || '';
-            
-        // Set module types in checkboxes
-        const typeCheckboxes = document.querySelectorAll('input[name="editModuleType"]');
-        if (typeCheckboxes) {
-            typeCheckboxes.forEach(cb => {
-                cb.checked = module.type && module.type.includes(cb.value);
-            });
-        }
-    }
-    
-    // Show the modal
+
     modal.classList.remove('hidden');
 }
 
@@ -963,6 +1026,8 @@ function saveModuleEditChanges(e) {
     if (isDbModule) {
         // Handle database module update
         const areaName = document.getElementById('editModuleArea').value.trim();
+        const baseLink = document.getElementById('editDbModuleBaseLink').value.trim();
+        const version = document.getElementById('editDbModuleVersion').value.trim() || null; // null wenn leer
         
         const updatedData = {
             title: newTitle,
@@ -970,50 +1035,55 @@ function saveModuleEditChanges(e) {
             examType: newExamType,
             language: newLanguage,
             semester_offered: newOffered,
-            areaName: areaName
+            areaName: areaName,
+            baseLink: baseLink, // Speichere BaseLink
+            version: version   // Speichere Version
+            // `lastUpdated` wird in `updateModuleInDatabase` gesetzt
         };
         
         // Update in the database
         if (window.moduleDatabase.updateModuleInDatabase(moduleId, updatedData)) {
-            updateModuleDatabaseTable();
-            updateModuleDatabaseCount();
+            updateModuleDatabaseTable(); // DB-Tabelle aktualisieren
             closeModuleEditModal();
+        } else {
+             alert("Fehler beim Aktualisieren des Datenbank-Moduls.");
         }
+
     } else {
-        // Handle course module update
+        // Update für Kurs-Modul (im Plan)
         const newSemester = parseInt(document.getElementById('editModuleSemester').value);
         const newAreaId = document.getElementById('editModuleArea').value;
-        
-        if (!newSemester || !newAreaId) {
-            alert('Bitte Semester und Bereich auswählen.');
+
+        if (isNaN(newSemester) || newSemester <= 0 || !newAreaId) {
+            alert('Bitte gültiges Semester und einen Bereich für das Modul im Plan auswählen.');
             return;
         }
-        
-        // Optional fields for course modules
+
         const newResponsible = document.getElementById('editModuleResponsible')?.value.trim() || '';
         const newDepartment = document.getElementById('editModuleDepartment')?.value.trim() || '';
-        
-        // Get module types
         const typeCheckboxes = document.querySelectorAll('input[name="editModuleType"]:checked');
         const selectedTypes = Array.from(typeCheckboxes).map(cb => cb.value);
-        const finalTypes = selectedTypes.length > 0 ? selectedTypes : ['VL']; // Default to VL
-        
-        // Find and update the course module
+        const finalTypes = selectedTypes.length > 0 ? selectedTypes : ['VL'];
+
         const moduleIndex = courses.findIndex(m => m.id === moduleId);
         if (moduleIndex !== -1) {
-            courses[moduleIndex] = {
-                ...courses[moduleIndex],
-                title: newTitle,
-                creditPoints: newLP,
-                semester: newSemester,
-                areaId: newAreaId,
-                examType: newExamType,
-                language: newLanguage,
-                responsible: newResponsible,
-                department: newDepartment,
-                semester_offered: newOffered,
-                type: finalTypes
-            };
+            // Hole Originaldaten um Link etc. nicht zu verlieren
+            const originalCourse = courses[moduleIndex];
+
+             courses[moduleIndex] = {
+                 ...originalCourse, // Behalte ID, Link etc. bei
+                 title: newTitle,
+                 creditPoints: newLP,
+                 semester: newSemester,
+                 areaId: newAreaId,
+                 examType: newExamType,
+                 language: newLanguage,
+                 responsible: newResponsible,
+                 department: newDepartment,
+                 semester_offered: newOffered,
+                 type: finalTypes
+                 // lastUpdated wird für Plan-Module nicht separat getrackt
+             };
             
             // Store responsible and department in autocomplete lists
             if (newResponsible && !responsiblePersons.includes(newResponsible)) {
@@ -1029,6 +1099,8 @@ function saveModuleEditChanges(e) {
             saveToLocalStorage();
             renderAreas();
             closeModuleEditModal();
+        } else {
+            alert("Fehler: Modul im Plan nicht gefunden.");
         }
     }
 }
@@ -1573,68 +1645,202 @@ function updateModuleDatabaseCount() {
     }
 }
 
+
 function updateModuleDatabaseTable() {
     const tableBody = document.getElementById('moduleDatabaseTable');
+    const countElement = document.getElementById('moduleDatabaseCount'); // Für Zähler-Update
+    const areaFilterSelect = document.getElementById('dbAreaFilterSelect');
     if (!tableBody) return;
-    
+
     const moduleDatabase = window.moduleDatabase.loadModuleDatabase();
-    
-    if (!moduleDatabase || moduleDatabase.length === 0) {
-        tableBody.innerHTML = '<tr><td class="border p-2" colspan="5">Keine Module in der Datenbank</td></tr>';
-        return;
-    }
-    
-    tableBody.innerHTML = '';
-    
-    moduleDatabase.forEach(module => {
-        const row = document.createElement('tr');
-        
-        // Add area tag class if available
-        if (module.areaName) {
-            row.classList.add('bg-blue-50');
-        }
-        
-        row.innerHTML = `
-            <td class="border p-2">
-                ${module.link ? 
-                    `<a href="${module.link}" target="_blank" class="text-blue-500 hover:underline">${module.title}</a>` : 
-                    module.title}
-                ${module.areaName ? 
-                    `<div class="text-xs mt-1 bg-blue-100 inline-block px-2 py-0.5 rounded-full">${module.areaName}</div>` : 
-                    ''}
-            </td>
-            <td class="border p-2">${module.creditPoints}</td>
-            <td class="border p-2">${module.examType}</td>
-            <td class="border p-2">${module.semester_offered || 'Beides'}</td>
-            <td class="border p-2">
-                <div class="flex gap-2">
-                    <button class="add-to-plan-btn bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs" 
-                            data-title="${module.title}" data-id="${module.id}">
-                        <i class="fas fa-plus mr-1"></i>Zum Plan
-                    </button>
-                    <button class="edit-db-module-btn text-blue-500 hover:text-blue-700" 
-                            data-id="${module.id}" data-type="database">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="remove-db-module-btn text-red-500 hover:text-red-700" 
-                            data-id="${module.id}" data-type="database">
-                        <i class="fas fa-trash-alt"></i>
-                    </button>
-                </div>
-            </td>
-        `;
-        
-        tableBody.appendChild(row);
+
+    // 1. Filter anwenden
+    let filteredModules = moduleDatabase.filter(module => {
+        // Basisfilter (Suche, Bereich)
+        const searchTermMatch = !dbSearchTerm ||
+            (module.title?.toLowerCase().includes(dbSearchTerm)) ||
+            (module.areaName?.toLowerCase().includes(dbSearchTerm)) ||
+            (module.examType?.toLowerCase().includes(dbSearchTerm)) ||
+            (module.id?.toLowerCase().includes(dbSearchTerm)); // Suche auch nach ID
+        const areaMatch = !dbSelectedArea || (module.areaName === dbSelectedArea);
+
+        // Erweiterter Filter
+        const advancedFilterMatch = !dbCurrentAdvancedFilter || checkAdvancedFilter(module, dbCurrentAdvancedFilter);
+
+        return searchTermMatch && areaMatch && advancedFilterMatch;
     });
-    
-    // Use event delegation instead of individual event listeners
+
+    // Zähler *vor* dem Ausblenden aktualisieren
+    if (countElement) {
+        countElement.textContent = filteredModules.length;
+    }
+
+    // 2. Nach Ausgeblendeten filtern (nur für die Anzeige, nicht für den Zähler)
+    // TODO: Option hinzufügen, um Ausgeblendete anzuzeigen
+    let displayModules = filteredModules;
+    if (!dbShowHidden) {
+        displayModules = filteredModules.filter(module => !module.isHidden);
+    }
+
+    // 3. Sortieren
+    displayModules.sort((a, b) => {
+        // Primäre Sortierung: isHidden (Nicht-Versteckte zuerst)
+        if (a.isHidden !== b.isHidden) {
+            return a.isHidden ? 1 : -1; // Versteckte nach hinten (false zuerst)
+        }
+        // Sekundäre Sortierung: isFavorite (Favoriten zuerst, innerhalb ihrer hidden-Gruppe)
+        if (a.isFavorite !== b.isFavorite) {
+            return a.isFavorite ? -1 : 1; // Favoriten nach vorne (true zuerst)
+        }
+
+        // Tertiäre Sortierung: Nach gewählter Spalte
+        let valA = a[dbSortColumn];
+        let valB = b[dbSortColumn];
+
+        // Behandlung spezieller Typen (unverändert)
+        if (dbSortColumn === 'creditPoints') {
+            valA = parseInt(valA) || 0; valB = parseInt(valB) || 0;
+        } else if (dbSortColumn === 'lastUpdated') {
+             valA = new Date(valA); valB = new Date(valB);
+        } else if (typeof valA === 'string') {
+            valA = valA.toLowerCase(); valB = valB?.toLowerCase() ?? '';
+        } else if (valA === null || valA === undefined) {
+             valA = (dbSortColumn === 'creditPoints' || dbSortColumn === 'isFavorite' || dbSortColumn === 'isHidden') ? 0 : '';
+        } else if (valB === null || valB === undefined) {
+             valB = (dbSortColumn === 'creditPoints' || dbSortColumn === 'isFavorite' || dbSortColumn === 'isHidden') ? 0 : '';
+        }
+
+        // Null/Undefined Handling bei Datum
+        if (dbSortColumn === 'lastUpdated') {
+            if (!valA && valB) return dbSortDirection === 'asc' ? -1 : 1; // Null/Undefined zuerst oder zuletzt
+            if (valA && !valB) return dbSortDirection === 'asc' ? 1 : -1;
+            if (!valA && !valB) return 0;
+        }
+
+
+        let comparison = 0;
+        if (valA < valB) comparison = -1;
+        else if (valA > valB) comparison = 1;
+
+        // Überschreibe Vergleich, wenn nach Favorit/Hidden sortiert wird (redundant, da oben behandelt, aber schadet nicht)
+        if (dbSortColumn === 'isHidden') comparison = a.isHidden ? 1 : -1;
+        else if (dbSortColumn === 'isFavorite') comparison = a.isFavorite ? -1 : 1;
+
+        return dbSortDirection === 'asc' ? comparison : comparison * -1;
+    });
+
+    // 4. Tabelle rendern
+    tableBody.innerHTML = '';
+
+    if (displayModules.length === 0) {
+        const colSpan = tableBody.closest('table').querySelector('thead th').parentElement.childElementCount;
+        tableBody.innerHTML = `<tr><td class="border p-2 italic text-gray-500" colspan="${colSpan}">Keine Module entsprechen den aktuellen Filtern${dbShowHidden ? ' (inkl. ausgeblendeter)' : ''}.</td></tr>`;
+    } else {
+        displayModules.forEach(module => {
+            const row = document.createElement('tr');
+            // Visuelles Feedback anwenden
+            if (module.isHidden) row.classList.add('opacity-50', 'italic', 'bg-gray-100'); // Deutlicheres Feedback für ausgeblendete
+            if (module.isFavorite && !module.isHidden) row.classList.add('bg-yellow-50'); // Favorit nur, wenn nicht ausgeblendet (optional)
+            if (module.isFavorite) row.classList.add('font-semibold'); // Immer fett für Favoriten
+
+
+            const lastUpdatedDate = module.lastUpdated ? new Date(module.lastUpdated) : null;
+            const formattedDate = lastUpdatedDate && !isNaN(lastUpdatedDate)
+                 ? lastUpdatedDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+                 : '-';
+
+            row.innerHTML = `
+                <td class="border p-1.5 text-center">
+                    <button class="favorite-db-module-btn hover:text-yellow-500 ${module.isFavorite ? 'text-yellow-400' : 'text-gray-300'}" data-id="${module.id}" title="Favorisieren">
+                        <i class="fas fa-star"></i>
+                    </button>
+                </td>
+                <td class="border p-1.5">
+                    ${module.baseLink ?
+                        `<a href="${module.baseLink}" target="_blank" class="text-blue-600 hover:underline">${module.title}</a>` :
+                        module.title}
+                    ${module.version ? `<span class="text-xs text-gray-400 ml-1">(v${module.version})</span>`: ''} <!-- Version beim Titel -->
+                </td>
+                <td class="border p-1.5">${module.areaName || '-'}</td>
+                <td class="border p-1.5 text-center">${module.creditPoints}</td>
+                <td class="border p-1.5">${module.examType || '-'}</td>
+                <td class="border p-1.5">${module.semester_offered || '-'}</td>
+                <td class="border p-1.5">${module.version || '-'}</td> <!-- Version Spalte bleibt optional -->
+                <td class="border p-1.5 text-xs text-gray-500 whitespace-nowrap">${formattedDate}</td>
+                <td class="border p-1.5">
+                    <div class="flex gap-2 items-center justify-center">
+                        <button class="add-to-plan-btn text-green-500 hover:text-green-700"
+                                data-id="${module.id}" title="Zum Plan hinzufügen" ${module.isHidden ? 'disabled style="opacity:0.3; cursor:not-allowed;"' : ''}> <!-- Button deaktivieren wenn hidden -->
+                            <i class="fas fa-plus"></i>
+                        </button>
+                        <button class="edit-db-module-btn text-blue-500 hover:text-blue-700"
+                                data-id="${module.id}" data-type="database" title="Bearbeiten">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="hide-db-module-btn ${module.isHidden ? 'text-green-500 hover:text-green-700' : 'text-gray-500 hover:text-gray-700'}" data-id="${module.id}" title="${module.isHidden ? 'Einblenden' : 'Ausblenden'}">
+                            <i class="fas ${module.isHidden ? 'fa-eye' : 'fa-eye-slash'}"></i> <!-- Icon umgekehrt -->
+                        </button>
+                        <button class="remove-db-module-btn text-red-500 hover:text-red-700"
+                                data-id="${module.id}" data-type="database" title="Löschen">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+
+    // 5. Sortierindikatoren aktualisieren
+    updateSortIndicators();
+
+    // 6. Bereichsfilter-Dropdown aktualisieren (nur wenn nötig)
+    // Mache dies seltener, z.B. nur beim Laden oder wenn Module hinzugefügt/entfernt wurden.
+    populateDbAreaFilter(moduleDatabase); // Übergib die *gesamte* DB für die Filteroptionen
+
+    // 7. Event Delegation sicherstellen (sollte durch DOMContentLoaded abgedeckt sein, aber zur Sicherheit)
     if (!tableBody.hasAttribute('data-listeners-added')) {
         tableBody.setAttribute('data-listeners-added', 'true');
-        tableBody.addEventListener('click', handleModuleDatabaseTableClick);
+        tableBody.addEventListener('click', handleModuleDatabaseTableClick); // Stelle sicher, dass dieser Handler auch fav/hide behandelt
     }
-    
-    lucide.createIcons();
 }
+
+// Hilfsfunktion zum Aktualisieren der Sortierindikatoren
+function updateSortIndicators() {
+    const tableHead = document.querySelector('#moduleDatabaseTable thead');
+    if (!tableHead) return;
+    // Alle alten Indikatoren entfernen
+    tableHead.querySelectorAll('.sort-indicator').forEach(span => span.innerHTML = '');
+    // Aktiven Indikator setzen
+    const activeHeader = tableHead.querySelector(`th[data-sort-by="${dbSortColumn}"] .sort-indicator`);
+    if (activeHeader) {
+        activeHeader.innerHTML = dbSortDirection === 'asc' ? '<i class="fas fa-arrow-up ml-1 text-xs"></i>' : '<i class="fas fa-arrow-down ml-1 text-xs"></i>';
+    }
+}
+
+// Hilfsfunktion zum Befüllen des Bereichsfilters
+function populateDbAreaFilter(moduleDatabase) {
+     const areaFilterSelect = document.getElementById('dbAreaFilterSelect');
+     if (!areaFilterSelect) return;
+
+     const currentSelectedValue = areaFilterSelect.value; // Aktuellen Wert speichern
+
+     // Eindeutige Bereiche sammeln
+     const areasInDb = [...new Set(moduleDatabase.map(m => m.areaName).filter(Boolean))].sort();
+
+     // Optionen erstellen
+     areaFilterSelect.innerHTML = '<option value="">Alle Bereiche</option>'; // Reset
+     areasInDb.forEach(area => {
+         const option = document.createElement('option');
+         option.value = area;
+         option.textContent = area;
+          if (area === currentSelectedValue) { // Alten Wert wieder auswählen
+             option.selected = true;
+         }
+         areaFilterSelect.appendChild(option);
+     });
+}
+
 
 /**
  * Befüllt ein Select-Element mit den Bereichen aus der `areas`-Liste.
@@ -1687,33 +1893,490 @@ function handleModuleDatabaseTableClick(event) {
     const moduleId = button.getAttribute('data-id');
     if (!moduleId) return;
 
-    const moduleDatabase = window.moduleDatabase.loadModuleDatabase();
-    const moduleData = moduleDatabase.find(m => m.id === moduleId);
+    const moduleDatabase = window.moduleDatabase.loadModuleDatabase(); // Neu laden für aktuellen Status
+    const moduleData = moduleDatabase.find(m => m.id === moduleId); // Finde das Modul
 
-    if (!moduleData) return;
+    if (!moduleData) {
+        console.warn("Modul nicht in DB gefunden für Klick:", moduleId);
+        return;
+    }
+
 
     if (button.classList.contains('add-to-plan-btn')) {
-        // **NEU: Rufe das Modal zur Bereichs-/Semesterauswahl auf**
         promptAreaAndSemesterForDbModule(moduleData);
-
-        // **ALT (wird nicht mehr direkt genutzt für diesen Button):**
-        // fillModuleFormWithData(moduleData);
-        // document.getElementById('moduleTitleInput').scrollIntoView({ behavior: 'smooth' });
     }
     else if (button.classList.contains('edit-db-module-btn')) {
-        // Bearbeiten in DB (unverändert)
         openModuleEditModal(moduleData, true);
     }
     else if (button.classList.contains('remove-db-module-btn')) {
-        // Löschen aus DB (unverändert)
-        if (confirm('Sind Sie sicher, dass Sie dieses Modul aus der Datenbank löschen möchten?')) {
+        if (confirm(`Sind Sie sicher, dass Sie das Modul "${moduleData.title}" aus der Datenbank löschen möchten?`)) {
             if (window.moduleDatabase.removeModuleFromDatabase(moduleId)) {
-                updateModuleDatabaseCount();
-                updateModuleDatabaseTable();
-                // Optional: Alert entfernen oder anpassen
-                // alert('Modul erfolgreich aus der Datenbank entfernt.');
+                updateModuleDatabaseTable(); // Update nach Löschen
             }
         }
+    }
+    // NEU: Favorisieren / Entfavorisieren
+    else if (button.classList.contains('favorite-db-module-btn')) {
+         const updatedData = { isFavorite: !moduleData.isFavorite };
+         if (window.moduleDatabase.updateModuleInDatabase(moduleId, updatedData)) {
+             updateModuleDatabaseTable(); // Update nach Änderung
+         }
+    }
+    // NEU: Ausblenden / Einblenden
+    else if (button.classList.contains('hide-db-module-btn')) {
+        const updatedData = { isHidden: !moduleData.isHidden };
+        if (window.moduleDatabase.updateModuleInDatabase(moduleId, updatedData)) {
+             updateModuleDatabaseTable(); // Update nach Änderung
+        }
+    }
+}
+
+
+const filterFields = {
+    title: { label: 'Titel', type: 'text' },
+    areaName: { label: 'Bereich', type: 'text' }, // Später evtl. Select mit Optionen
+    creditPoints: { label: 'LP', type: 'number' },
+    examType: { label: 'Prüfungsform', type: 'text' }, // Später evtl. Select
+    semester_offered: { label: 'Turnus', type: 'select', options: ['SoSe', 'WiSe', 'Beides', ''] },
+    version: { label: 'Version', type: 'text' },
+    lastUpdated: { label: 'Aktualisiert', type: 'date' }, // Für Datumsvergleiche
+    isFavorite: {label: 'Favorit', type: 'boolean'},
+    // isHidden wird normalerweise nicht gefiltert, außer man will sie explizit sehen
+};
+
+const filterOperators = {
+    text: [
+        { value: 'contains', label: 'enthält' },
+        { value: 'not_contains', label: 'enthält nicht' },
+        { value: 'equals', label: 'ist gleich' },
+        { value: 'not_equals', label: 'ist nicht gleich' },
+        { value: 'starts_with', label: 'beginnt mit' },
+        { value: 'ends_with', label: 'endet mit' },
+        { value: 'is_empty', label: 'ist leer' },
+        { value: 'is_not_empty', label: 'ist nicht leer' },
+    ],
+    number: [
+        { value: '=', label: '=' },
+        { value: '!=', label: '!=' },
+        { value: '>', label: '>' },
+        { value: '>=', label: '>=' },
+        { value: '<', label: '<' },
+        { value: '<=', label: '<=' },
+    ],
+     select: [
+        { value: 'equals', label: 'ist gleich' },
+        { value: 'not_equals', label: 'ist nicht gleich' },
+    ],
+    date: [ // Vergleichsoperatoren für Datum/Zeit
+        { value: 'date_equals', label: 'ist am' },
+        { value: 'date_not_equals', label: 'ist nicht am' },
+        { value: 'date_before', label: 'ist vor' },
+        { value: 'date_after', label: 'ist nach' },
+    ],
+     boolean: [
+        { value: 'is_true', label: 'ist wahr' },
+        { value: 'is_false', label: 'ist falsch' },
+    ]
+};
+
+function openFilterBuilder() {
+    const modal = document.getElementById('filterBuilderModal');
+    if (!modal) return;
+     // Reset Builder UI
+     document.getElementById('filterConditionsContainer').innerHTML = '<p id="noFiltersText" class="text-sm text-gray-500">Noch keine Bedingungen hinzugefügt.</p>';
+     document.getElementById('filterNameInput').value = dbCurrentAdvancedFilter?.name || ''; // Lade Namen des aktuellen Filters
+     const logic = dbCurrentAdvancedFilter?.logic || 'AND';
+     document.querySelector(`input[name="filterLogic"][value="${logic}"]`).checked = true;
+
+     // Lade vorhandene Regeln, wenn ein Filter aktiv ist
+     if (dbCurrentAdvancedFilter && dbCurrentAdvancedFilter.rules) {
+        dbCurrentAdvancedFilter.rules.forEach(rule => addFilterConditionRow(rule));
+     }
+
+    modal.classList.remove('hidden');
+}
+
+function closeFilterBuilder() {
+    const modal = document.getElementById('filterBuilderModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function addFilterConditionRow(rule = null) {
+     document.getElementById('noFiltersText')?.remove(); // "Keine Filter"-Text entfernen
+     const container = document.getElementById('filterConditionsContainer');
+     const conditionDiv = document.createElement('div');
+     conditionDiv.className = 'filter-condition-row flex items-center gap-2 p-2 border rounded bg-white';
+
+     // Feld Auswahl
+     const fieldSelect = document.createElement('select');
+     fieldSelect.className = 'filter-field border p-1 rounded text-sm flex-grow';
+     for (const [key, config] of Object.entries(filterFields)) {
+         const option = document.createElement('option');
+         option.value = key;
+         option.textContent = config.label;
+         if (rule && rule.field === key) option.selected = true;
+         fieldSelect.appendChild(option);
+     }
+
+     // Operator Auswahl (wird bei Feldänderung aktualisiert)
+     const operatorSelect = document.createElement('select');
+     operatorSelect.className = 'filter-operator border p-1 rounded text-sm w-32'; // Feste Breite für Operator
+
+      // Wert Eingabe (wird bei Feldänderung aktualisiert)
+      const valueInputContainer = document.createElement('div'); // Container für das Eingabefeld
+      valueInputContainer.className = 'filter-value-container flex-grow';
+
+
+      // Hilfsfunktion zum Aktualisieren von Operator und Wert basierend auf dem Feld
+      const updateOperatorAndValue = (selectedFieldKey) => {
+         const fieldConfig = filterFields[selectedFieldKey];
+         operatorSelect.innerHTML = ''; // Operator leeren
+
+          let currentOperators = filterOperators[fieldConfig.type] || filterOperators.text; // Fallback auf Text
+
+          currentOperators.forEach(op => {
+              const option = document.createElement('option');
+              option.value = op.value;
+              option.textContent = op.label;
+              // Wähle Operator vor, wenn Regel geladen wird
+              if (rule && rule.field === selectedFieldKey && rule.operator === op.value) {
+                  option.selected = true;
+              }
+              operatorSelect.appendChild(option);
+          });
+
+          // Wertfeld anpassen
+          valueInputContainer.innerHTML = ''; // Altes Feld entfernen
+          let inputElement;
+
+           // Bestimme, ob das Wertfeld benötigt wird
+           const needsValueInput = !['is_empty', 'is_not_empty', 'is_true', 'is_false'].includes(operatorSelect.value);
+
+          if (fieldConfig.type === 'number') {
+              inputElement = document.createElement('input');
+              inputElement.type = 'number';
+              inputElement.step = 'any'; // Erlaube Dezimalzahlen für LP falls nötig
+          } else if (fieldConfig.type === 'date') {
+              inputElement = document.createElement('input');
+              inputElement.type = 'date';
+          } else if (fieldConfig.type === 'select') {
+                inputElement = document.createElement('select');
+                (fieldConfig.options || []).forEach(optValue => {
+                    const opt = document.createElement('option');
+                    opt.value = optValue;
+                    opt.textContent = optValue === '' ? 'k.A.' : optValue; // Anzeige für leeren Wert
+                    if(rule && rule.field === selectedFieldKey && String(rule.value) === String(optValue)) opt.selected = true;
+                    inputElement.appendChild(opt);
+                });
+           } else if (fieldConfig.type === 'boolean') {
+                // Für boolean wird kein Wertfeld benötigt, der Operator reicht
+                 inputElement = null; // Kein Input
+           } else { // Default: text
+              inputElement = document.createElement('input');
+              inputElement.type = 'text';
+          }
+
+          if (inputElement) {
+             inputElement.className = 'filter-value border p-1 rounded text-sm w-full';
+              if (rule && rule.field === selectedFieldKey) {
+                  inputElement.value = rule.value ?? '';
+              }
+              valueInputContainer.appendChild(inputElement);
+              inputElement.style.display = needsValueInput ? '' : 'none'; // Wertfeld ein/ausblenden
+          }
+
+          // Blende Wertfeld aus, wenn Operator es nicht braucht
+           operatorSelect.onchange = () => {
+                 const operatorNeedsValue = !['is_empty', 'is_not_empty', 'is_true', 'is_false'].includes(operatorSelect.value);
+                 if(inputElement) {
+                     inputElement.style.display = operatorNeedsValue ? '' : 'none';
+                 }
+           };
+      };
+
+     // Event Listener für Feldänderung
+     fieldSelect.addEventListener('change', (e) => updateOperatorAndValue(e.target.value));
+
+     // Löschen Button
+     const deleteBtn = document.createElement('button');
+     deleteBtn.type = 'button';
+     deleteBtn.innerHTML = '<i class="fas fa-times text-red-500"></i>';
+     deleteBtn.className = 'px-1';
+     deleteBtn.onclick = () => conditionDiv.remove();
+
+     // Elemente hinzufügen
+     conditionDiv.appendChild(fieldSelect);
+     conditionDiv.appendChild(operatorSelect);
+     conditionDiv.appendChild(valueInputContainer);
+     conditionDiv.appendChild(deleteBtn);
+     container.appendChild(conditionDiv);
+
+     // Initial Operator und Wert setzen (beim Laden einer Regel oder neu)
+     updateOperatorAndValue(rule ? rule.field : fieldSelect.value);
+}
+
+function collectFilterFromBuilder() {
+     const conditions = [];
+     const container = document.getElementById('filterConditionsContainer');
+     const rows = container.querySelectorAll('.filter-condition-row');
+
+     rows.forEach(row => {
+         const field = row.querySelector('.filter-field').value;
+         const operator = row.querySelector('.filter-operator').value;
+         const valueInput = row.querySelector('.filter-value'); // Kann null sein für boolean
+         let value = valueInput ? valueInput.value : null;
+
+         // Konvertiere Wert basierend auf Feldtyp
+          const fieldType = filterFields[field]?.type;
+          if (fieldType === 'number') {
+              value = parseFloat(value);
+              if (isNaN(value) && !['is_empty', 'is_not_empty'].includes(operator)) return; // Ungültige Zahl ignorieren
+          } else if (fieldType === 'boolean') {
+              // Wert ist implizit durch Operator bestimmt
+              value = (operator === 'is_true');
+          } else if (value === null && !['is_empty', 'is_not_empty', 'is_true', 'is_false'].includes(operator)) {
+               // Wenn ein Wert erwartet wird, aber keiner da ist (außer bei leeren/nicht leeren/boolschen Checks)
+               return; // Ignoriere unvollständige Regel
+          }
+
+
+         conditions.push({ field, operator, value });
+     });
+
+     const logic = document.querySelector('input[name="filterLogic"]:checked').value;
+
+     if (conditions.length === 0) return null; // Kein gültiger Filter
+
+     return {
+         id: dbCurrentAdvancedFilter?.id || 'temp_' + Date.now(), // ID für Wiedererkennung
+         name: document.getElementById('filterNameInput').value.trim() || `Filter ${new Date().toLocaleTimeString()}`,
+         logic: logic,
+         rules: conditions
+     };
+}
+
+function applyAdvancedFilterFromBuilder() {
+    dbCurrentAdvancedFilter = collectFilterFromBuilder();
+    // Setze das Haupt-Dropdown zurück, da der Builder angewendet wurde
+    document.getElementById('dbSavedFilterSelect').value = '';
+    closeFilterBuilder();
+    updateModuleDatabaseTable();
+}
+
+function saveAndApplyAdvancedFilter() {
+     const newFilter = collectFilterFromBuilder();
+     if (!newFilter || newFilter.rules.length === 0) {
+         alert("Filter enthält keine gültigen Bedingungen zum Speichern.");
+         return;
+     }
+
+     const filterName = document.getElementById('filterNameInput').value.trim();
+      if (!filterName) {
+         alert("Bitte geben Sie einen Namen für den Filter ein.");
+         document.getElementById('filterNameInput').focus();
+         return;
+     }
+      newFilter.name = filterName; // Setze den Namen
+      newFilter.id = 'filter_' + filterName.replace(/\s+/g, '_') + '_' + Date.now(); // Eindeutige ID generieren
+
+     // Prüfen, ob Filter mit gleichem Namen existiert
+     const existingIndex = savedDbFilters.findIndex(f => f.name === newFilter.name);
+     if (existingIndex !== -1) {
+         if (!confirm(`Ein Filter mit dem Namen "${newFilter.name}" existiert bereits. Möchten Sie ihn überschreiben?`)) {
+             return;
+         }
+         savedDbFilters[existingIndex] = newFilter; // Überschreiben
+     } else {
+         savedDbFilters.push(newFilter); // Neu hinzufügen
+     }
+
+     if (window.moduleDatabase.saveDbFilters(savedDbFilters)) {
+         populateSavedFiltersDropdown();
+         // Wähle den neu gespeicherten Filter im Dropdown aus
+         document.getElementById('dbSavedFilterSelect').value = newFilter.id;
+          dbCurrentAdvancedFilter = newFilter; // Direkt anwenden
+          closeFilterBuilder();
+          updateModuleDatabaseTable();
+     } else {
+          alert("Fehler beim Speichern des Filters.");
+     }
+
+}
+
+function populateSavedFiltersDropdown() {
+    const select = document.getElementById('dbSavedFilterSelect');
+    if (!select) return;
+    select.innerHTML = '<option value="">Kein Filter</option>'; // Reset
+    savedDbFilters.forEach(filter => {
+        const option = document.createElement('option');
+        option.value = filter.id; // Verwende ID als Wert
+        option.textContent = filter.name;
+        select.appendChild(option);
+    });
+     // Wähle den aktuell angewendeten Filter vor, falls er gespeichert ist
+     if(dbCurrentAdvancedFilter && savedDbFilters.some(f => f.id === dbCurrentAdvancedFilter.id)) {
+         select.value = dbCurrentAdvancedFilter.id;
+     }
+}
+
+function applySavedFilter(event) {
+    const filterId = event.target.value;
+    if (!filterId) {
+        dbCurrentAdvancedFilter = null; // Keinen Filter anwenden
+    } else {
+        dbCurrentAdvancedFilter = savedDbFilters.find(f => f.id === filterId);
+    }
+    updateModuleDatabaseTable();
+}
+
+function clearAllDbFilters() {
+    dbSearchTerm = '';
+    dbSelectedArea = '';
+    dbCurrentAdvancedFilter = null;
+    // Setze UI Elemente zurück
+    document.getElementById('dbSearchInput').value = '';
+    document.getElementById('dbAreaFilterSelect').value = '';
+    document.getElementById('dbSavedFilterSelect').value = '';
+    updateModuleDatabaseTable();
+}
+
+// Funktion zum Speichern der aktuellen Filter (ohne Builder)
+function saveCurrentFilterSetup() {
+     // Erstelle ein temporäres Filterobjekt aus den aktuellen Einstellungen
+     // Nur sinnvoll, wenn mindestens Suche oder Bereichsfilter aktiv ist
+     if (!dbSearchTerm && !dbSelectedArea && !dbCurrentAdvancedFilter) {
+         alert("Keine aktiven Filter zum Speichern ausgewählt (außer Sortierung). Bitte verwenden Sie den Filter Builder für komplexere Filter.");
+         return;
+     }
+
+     let filterToSave = {
+         id: 'filter_' + Date.now(),
+         name: '', // Benutzer muss Namen eingeben
+         logic: 'AND', // Standard für einfache Filter
+         rules: []
+     };
+
+     if (dbSearchTerm) {
+         // Annahme: Suche betrifft Titel
+         filterToSave.rules.push({ field: 'title', operator: 'contains', value: dbSearchTerm });
+     }
+     if (dbSelectedArea) {
+         filterToSave.rules.push({ field: 'areaName', operator: 'equals', value: dbSelectedArea });
+     }
+      // Füge Regeln des aktuellen Advanced Filters hinzu, falls vorhanden
+      if (dbCurrentAdvancedFilter && dbCurrentAdvancedFilter.rules.length > 0) {
+          filterToSave.rules.push(...dbCurrentAdvancedFilter.rules);
+          filterToSave.logic = dbCurrentAdvancedFilter.logic; // Übernehme Logik
+      }
+
+     if (filterToSave.rules.length === 0) {
+          alert("Keine Filterbedingungen zum Speichern gefunden.");
+          return;
+     }
+
+     const filterName = prompt("Geben Sie einen Namen für diese Filterkonfiguration ein:", `Filter ${new Date().toLocaleTimeString()}`);
+     if (!filterName) return; // Abbruch
+
+     filterToSave.name = filterName;
+     filterToSave.id = 'filter_' + filterName.replace(/\s+/g, '_') + '_' + Date.now();
+
+
+     const existingIndex = savedDbFilters.findIndex(f => f.name === filterName);
+      if (existingIndex !== -1) {
+         if (!confirm(`Ein Filter mit dem Namen "${filterName}" existiert bereits. Möchten Sie ihn überschreiben?`)) {
+             return;
+         }
+         savedDbFilters[existingIndex] = filterToSave;
+     } else {
+         savedDbFilters.push(filterToSave);
+     }
+
+     if (window.moduleDatabase.saveDbFilters(savedDbFilters)) {
+         populateSavedFiltersDropdown();
+         document.getElementById('dbSavedFilterSelect').value = filterToSave.id; // Wähle ihn aus
+          dbCurrentAdvancedFilter = filterToSave; // Wende ihn auch an
+          updateModuleDatabaseTable();
+          alert(`Filter "${filterName}" gespeichert.`);
+     } else {
+          alert("Fehler beim Speichern des Filters.");
+     }
+}
+
+
+function checkAdvancedFilter(module, filter) {
+    if (!filter || !filter.rules || filter.rules.length === 0) return true; // Kein Filter -> passt immer
+
+    const logic = filter.logic || 'AND'; // Standard ist AND
+    let results = [];
+
+    for (const rule of filter.rules) {
+        let moduleValue = module[rule.field];
+        let ruleValue = rule.value;
+        const operator = rule.operator;
+
+        // Normalisierung für Vergleiche
+        if (typeof moduleValue === 'string') moduleValue = moduleValue.toLowerCase();
+        if (typeof ruleValue === 'string') ruleValue = ruleValue.toLowerCase();
+
+         // Behandlung von Datumswerten
+         if (filterFields[rule.field]?.type === 'date' && operator.startsWith('date_')) {
+             moduleValue = moduleValue ? new Date(moduleValue).setHours(0,0,0,0) : null; // Nur Datumsteil vergleichen
+             ruleValue = ruleValue ? new Date(ruleValue).setHours(0,0,0,0) : null;
+              if (moduleValue === null || ruleValue === null) {
+                   results.push(false); // Kein gültiger Datumsvergleich möglich
+                   continue;
+              }
+         } else if (filterFields[rule.field]?.type === 'number') {
+              moduleValue = parseFloat(moduleValue);
+              ruleValue = parseFloat(ruleValue); // Regelwert wurde schon beim Sammeln geparst
+               if (isNaN(moduleValue) && !['is_empty', 'is_not_empty'].includes(operator)) {
+                    results.push(false); // Ungültiger Zahlenwert im Modul
+                    continue;
+               }
+         } else if (filterFields[rule.field]?.type === 'boolean') {
+              // Der Wert ist im Operator kodiert
+         } else if (moduleValue === null || moduleValue === undefined) {
+              moduleValue = ''; // Behandle null/undefined wie leeren String für Textvergleiche
+         }
+
+
+        let match = false;
+        switch (operator) {
+            // Text
+            case 'contains': match = String(moduleValue).includes(String(ruleValue)); break;
+            case 'not_contains': match = !String(moduleValue).includes(String(ruleValue)); break;
+            case 'equals': match = String(moduleValue) === String(ruleValue); break;
+            case 'not_equals': match = String(moduleValue) !== String(ruleValue); break;
+            case 'starts_with': match = String(moduleValue).startsWith(String(ruleValue)); break;
+            case 'ends_with': match = String(moduleValue).endsWith(String(ruleValue)); break;
+            case 'is_empty': match = moduleValue === '' || moduleValue === null || moduleValue === undefined; break;
+            case 'is_not_empty': match = moduleValue !== '' && moduleValue !== null && moduleValue !== undefined; break;
+            // Number
+            case '=': match = moduleValue === ruleValue; break;
+            case '!=': match = moduleValue !== ruleValue; break;
+            case '>': match = moduleValue > ruleValue; break;
+            case '>=': match = moduleValue >= ruleValue; break;
+            case '<': match = moduleValue < ruleValue; break;
+            case '<=': match = moduleValue <= ruleValue; break;
+             // Date
+             case 'date_equals': match = moduleValue === ruleValue; break;
+             case 'date_not_equals': match = moduleValue !== ruleValue; break;
+             case 'date_before': match = moduleValue < ruleValue; break;
+             case 'date_after': match = moduleValue > ruleValue; break;
+             // Boolean
+              case 'is_true': match = !!moduleValue; break; // !! konvertiert zu boolean
+              case 'is_false': match = !moduleValue; break;
+
+            default: match = false; // Unbekannter Operator
+        }
+        results.push(match);
+    } // Ende der Loop über Regeln
+
+    // Logik anwenden
+    if (logic === 'AND') {
+        return results.every(res => res === true); // Alle müssen wahr sein
+    } else { // OR
+        return results.some(res => res === true); // Mindestens einer muss wahr sein
     }
 }
 

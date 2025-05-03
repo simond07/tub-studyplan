@@ -338,6 +338,8 @@ function extractModulesFromTable(table) {
         
         const title = titleLink.textContent.trim();
         const link = titleLink.getAttribute('href');
+        const fullLink = titleLink ? titleLink.getAttribute('href') : ''; // oder link.getAttribute('href')
+        const { baseLink, version } = window.moduleDatabase._parseLink(fullLink); // Nutze die Funktion aus module-database.js
         
         // Find LP, prüfungsform and turnus from specific cells
         let lpIndex = headers.findIndex(h => h.includes('lp'));
@@ -363,17 +365,19 @@ function extractModulesFromTable(table) {
         
         // Create module object
         const module = {
-            id: 'module_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+            id: 'module_db_' + Date.now() + '_' + Math.floor(Math.random() * 1000), // Temporäre ID für Scraper
             title: title,
             creditPoints: lp,
             examType: mapExamType(examType),
-            language: 'de', // Default
-            responsible: '',
+            language: mapLanguage(languageText), // Angenommen, Sprache wird auch extrahiert
             semester_offered: mapSemesterOffered(turnus),
-            description: '',
-            link: link,
-            type: ['VL'],
-            areaName: areaName
+            areaName: areaName, // Bereichsname aus Scraping-Kontext
+            baseLink: baseLink, // Gespeicherter Basis-Link
+            version: version,   // Gespeicherte Version
+            // lastUpdated, isFavorite, isHidden werden beim Speichern in DB gesetzt
+             description: '', // Optional
+             responsible: '', // Optional
+             type: ['VL'] // Default oder aus Scraping
         };
         
         foundModules.push(module);
