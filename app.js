@@ -1779,11 +1779,7 @@ function updateModuleDatabaseTable() {
     if (!tableBody) return;
 
     const moduleDatabase = window.moduleDatabase.loadModuleDatabase();
-    const planCourses = courses; // Zugriff auf die globalen Plan-Module
-
-    // 1. Eindeutige Titel der Module im Plan sammeln (für schnelle Prüfung)
-    // Wir nehmen an, dass Module anhand des Titels als "gleich" betrachtet werden,
-    // auch wenn sie in verschiedenen Semestern/Bereichen im Plan sind.
+    const planCourses = courses;
     const planCourseTitles = new Set(planCourses.map(course => course.title.toLowerCase()));
 
     // 2. Filter anwenden (Basis + Erweitert)
@@ -1802,104 +1798,106 @@ function updateModuleDatabaseTable() {
         countElement.textContent = filteredModules.length;
     }
 
-    // 3. Nach Ausgeblendeten filtern (wenn Checkbox nicht aktiv)
     let displayModules = filteredModules;
     if (!dbShowHidden) {
         displayModules = filteredModules.filter(module => !module.isHidden);
     }
 
-    // 4. Sortieren
+    // --- Sortierung (Überarbeitet) ---
+    console.log(`Sortiere DB Tabelle nach: ${dbSortColumn}, Richtung: ${dbSortDirection}`); // Debugging
+
     displayModules.sort((a, b) => {
-        // Primäre Sortierung: isHidden (Nicht-Versteckte zuerst)
+        // 1. Priorität: isHidden (Nicht-Versteckte zuerst)
         if (a.isHidden !== b.isHidden) {
-            return a.isHidden ? 1 : -1; // Versteckte nach hinten (false zuerst)
-        }
-        // Sekundäre Sortierung: isFavorite (Favoriten zuerst, innerhalb ihrer hidden-Gruppe)
-        if (a.isFavorite !== b.isFavorite) {
-            return a.isFavorite ? -1 : 1; // Favoriten nach vorne (true zuerst)
+            return a.isHidden ? 1 : -1; // true (versteckt) kommt nach false (sichtbar)
         }
 
-        // Tertiäre Sortierung: Nach gewählter Spalte
+        // 2. Priorität: isFavorite (Favoriten zuerst, innerhalb ihrer hidden-Gruppe)
+        if (a.isFavorite !== b.isFavorite) {
+            // Wenn nach Favorit sortiert wird (dbSortColumn === 'isFavorite'),
+            // kehre die Richtung um, da Favoriten normalerweise oben stehen (desc)
+            // Sonst normale Priorisierung (Favoriten nach vorne).
+            const favSortOrder = dbSortColumn === 'isFavorite' ? (dbSortDirection === 'desc' ? -1 : 1) : -1;
+            return a.isFavorite ? favSortOrder : -favSortOrder;
+        }
+
+        // 3. Tertiäre Sortierung: Nach der ausgewählten Spalte (dbSortColumn)
         let valA = a[dbSortColumn];
         let valB = b[dbSortColumn];
-
-        // Behandlung spezieller Typen (unverändert)
-        if (dbSortColumn === 'creditPoints') {
-            valA = parseInt(valA) || 0; valB = parseInt(valB) || 0;
-        } else if (dbSortColumn === 'lastUpdated') {
-             valA = new Date(valA); valB = new Date(valB);
-        } else if (typeof valA === 'string') {
-            valA = valA.toLowerCase(); valB = valB?.toLowerCase() ?? '';
-        } else if (valA === null || valA === undefined) {
-             valA = (dbSortColumn === 'creditPoints' || dbSortColumn === 'isFavorite' || dbSortColumn === 'isHidden') ? 0 : '';
-        } else if (valB === null || valB === undefined) {
-             valB = (dbSortColumn === 'creditPoints' || dbSortColumn === 'isFavorite' || dbSortColumn === 'isHidden') ? 0 : '';
-        }
-
-        // Null/Undefined Handling bei Datum
-        if (dbSortColumn === 'lastUpdated') {
-            if (!valA && valB) return dbSortDirection === 'asc' ? -1 : 1; // Null/Undefined zuerst oder zuletzt
-            if (valA && !valB) return dbSortDirection === 'asc' ? 1 : -1;
-            if (!valA && !valB) return 0;
-        }
-
-
         let comparison = 0;
-        if (valA < valB) comparison = -1;
-        else if (valA > valB) comparison = 1;
 
-        // Überschreibe Vergleich, wenn nach Favorit/Hidden sortiert wird (redundant, da oben behandelt, aber schadet nicht)
-        if (dbSortColumn === 'isHidden') comparison = a.isHidden ? 1 : -1;
-        else if (dbSortColumn === 'isFavorite') comparison = a.isFavorite ? -1 : 1;
+        // Werte für Vergleich vorbereiten/normalisieren
+        switch (dbSortColumn) {
+            case 'creditPoints':
+                valA = parseInt(valA) || 0;
+                valB = parseInt(valB) || 0;
+                comparison = valA - valB; // Direkter numerischer Vergleich
+                break;
+            case 'lastUpdated':
+                // Behandle ungültige Daten als "sehr alt" für Sortierung
+                valA = valA ? new Date(valA).getTime() : 0;
+                valB = valB ? new Date(valB).getTime() : 0;
+                comparison = valA - valB;
+                break;
+            case 'isFavorite': // Sollte durch Prio 2 abgedeckt sein, aber als Fallback
+            case 'isHidden':   // Sollte durch Prio 1 abgedeckt sein, aber als Fallback
+                valA = !!valA; // Konvertiere zu Boolean
+                valB = !!valB;
+                if (valA === valB) comparison = 0;
+                else comparison = valA ? -1 : 1; // true zuerst (impliziert desc für diese Spalten)
+                 // Falls die Sortierrichtung ASC ist, umkehren
+                 if (dbSortDirection === 'asc') comparison *= -1;
+                break;
+             case 'title':
+             case 'areaName':
+             case 'examType':
+             case 'semester_offered':
+             case 'version':
+             default: // Standard: String-Vergleich (case-insensitive)
+                valA = String(valA ?? '').toLowerCase(); // Behandle null/undefined als leeren String
+                valB = String(valB ?? '').toLowerCase();
+                comparison = valA.localeCompare(valB, 'de', { sensitivity: 'base' }); // Sprachsensitiver Vergleich
+                break;
+        }
 
-        return dbSortDirection === 'asc' ? comparison : comparison * -1;
+        // Wende die globale Sortierrichtung an (außer für boolean Spalten, wo sie schon berücksichtigt wurde)
+         if (dbSortColumn !== 'isFavorite' && dbSortColumn !== 'isHidden') {
+            return dbSortDirection === 'asc' ? comparison : comparison * -1;
+         } else {
+             return comparison; // Richtung wurde schon oben behandelt
+         }
     });
 
+    // --- Tabelle rendern (Rest der Funktion wie zuvor) ---
+    tableBody.innerHTML = ''; // Leeren
+
     if (displayModules.length === 0) {
+        // ... (Keine Module Nachricht) ...
         const colSpan = tableBody.closest('table').querySelector('thead th').parentElement.childElementCount;
         tableBody.innerHTML = `<tr><td class="border p-2 italic text-gray-500" colspan="${colSpan}">Keine Module entsprechen den aktuellen Filtern${dbShowHidden ? ' (inkl. ausgeblendeter)' : ''}.</td></tr>`;
     } else {
         displayModules.forEach(module => {
+            // ... (Erstellen der Tabellenzeile `row` wie in deiner Version) ...
             const row = document.createElement('tr');
-
-            // NEU: Prüfen, ob Modul (anhand Titel) im Plan ist
             const isInPlan = planCourseTitles.has(module.title.toLowerCase());
 
-            // Visuelles Feedback
             if (module.isHidden) row.classList.add('opacity-50', 'italic', 'bg-gray-100');
-            else if (isInPlan) row.classList.add('bg-green-50'); // Grünlicher Hintergrund, wenn im Plan und nicht versteckt
-            else if (module.isFavorite) row.classList.add('bg-yellow-50'); // Favorit nur, wenn nicht im Plan & nicht versteckt
+            else if (isInPlan) row.classList.add('bg-green-50');
+            else if (module.isFavorite) row.classList.add('bg-yellow-50');
 
-            if (module.isFavorite) row.classList.add('font-semibold'); // Immer fett für Favoriten
-
+            if (module.isFavorite) row.classList.add('font-semibold');
 
             const lastUpdatedDate = module.lastUpdated ? new Date(module.lastUpdated) : null;
             const formattedDate = lastUpdatedDate && !isNaN(lastUpdatedDate)
                  ? lastUpdatedDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
                  : '-';
 
-            // Button Zustand/Text für "Zum Plan hinzufügen" anpassen
             let addToPlanButtonHtml;
-            if (isInPlan) {
-                addToPlanButtonHtml = `
-                    <button class="text-green-600 cursor-default" disabled title="Bereits im Plan">
-                        <i class="fas fa-check-circle"></i>
-                    </button>`;
-            } else if (module.isHidden) {
-                addToPlanButtonHtml = `
-                    <button class="text-gray-400 cursor-not-allowed" disabled title="Modul ist ausgeblendet">
-                        <i class="fas fa-plus"></i>
-                    </button>`;
-            } else {
-                 addToPlanButtonHtml = `
-                    <button class="add-to-plan-btn text-green-500 hover:text-green-700"
-                            data-id="${module.id}" title="Zum Plan hinzufügen">
-                        <i class="fas fa-plus"></i>
-                    </button>`;
-            }
+            if (isInPlan) { addToPlanButtonHtml = `<button class="text-green-600 cursor-default" disabled title="Bereits im Plan"><i class="fas fa-check-circle"></i></button>`; }
+            else if (module.isHidden) { addToPlanButtonHtml = `<button class="text-gray-400 cursor-not-allowed" disabled title="Modul ist ausgeblendet"><i class="fas fa-plus"></i></button>`; }
+            else { addToPlanButtonHtml = `<button class="add-to-plan-btn text-green-500 hover:text-green-700" data-id="${module.id}" title="Zum Plan hinzufügen"><i class="fas fa-plus"></i></button>`; }
 
-
-            row.innerHTML = `
+             row.innerHTML = `
                 <td class="border p-1.5 text-center"> <!-- Fav -->
                     <button class="favorite-db-module-btn hover:text-yellow-500 ${module.isFavorite ? 'text-yellow-400' : 'text-gray-300'}" data-id="${module.id}" title="Favorisieren">
                         <i class="fas fa-star"></i>
@@ -1915,22 +1913,13 @@ function updateModuleDatabaseTable() {
                 <td class="border p-1.5 text-center">${module.creditPoints}</td> <!-- LP -->
                 <td class="border p-1.5">${module.examType || '-'}</td> <!-- Prüfung -->
                 <td class="border p-1.5">${module.semester_offered || '-'}</td> <!-- Turnus -->
-                <td class="border p-1.5">${module.version || '-'}</td> <!-- Version -->
                 <td class="border p-1.5 text-xs text-gray-500 whitespace-nowrap">${formattedDate}</td> <!-- Aktualisiert -->
                 <td class="border p-1.5"> <!-- Aktionen -->
                     <div class="flex gap-2 items-center justify-center">
-                        ${addToPlanButtonHtml} <!-- Geänderter Add-Button -->
-                        <button class="edit-db-module-btn text-blue-500 hover:text-blue-700"
-                                data-id="${module.id}" data-type="database" title="Bearbeiten">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="hide-db-module-btn ${module.isHidden ? 'text-green-500 hover:text-green-700' : 'text-gray-500 hover:text-gray-700'}" data-id="${module.id}" title="${module.isHidden ? 'Einblenden' : 'Ausblenden'}">
-                            <i class="fas ${module.isHidden ? 'fa-eye' : 'fa-eye-slash'}"></i>
-                        </button>
-                        <button class="remove-db-module-btn text-red-500 hover:text-red-700"
-                                data-id="${module.id}" data-type="database" title="Löschen">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
+                        ${addToPlanButtonHtml}
+                        <button class="edit-db-module-btn text-blue-500 hover:text-blue-700" data-id="${module.id}" data-type="database" title="Bearbeiten"><i class="fas fa-edit"></i></button>
+                        <button class="hide-db-module-btn ${module.isHidden ? 'text-green-500 hover:text-green-700' : 'text-gray-500 hover:text-gray-700'}" data-id="${module.id}" title="${module.isHidden ? 'Einblenden' : 'Ausblenden'}"><i class="fas ${module.isHidden ? 'fa-eye' : 'fa-eye-slash'}"></i></button>
+                        <button class="remove-db-module-btn text-red-500 hover:text-red-700" data-id="${module.id}" data-type="database" title="Löschen"><i class="fas fa-trash-alt"></i></button>
                     </div>
                 </td>
             `;
@@ -1938,17 +1927,16 @@ function updateModuleDatabaseTable() {
         });
     }
 
-    // 6. Sortierindikatoren aktualisieren
+    // --- Ende Tabelle rendern ---
+
     updateSortIndicators();
+    populateDbAreaFilter(moduleDatabase);
 
-    // 7. Bereichsfilter-Dropdown aktualisieren (nur wenn nötig)
-    // Mache dies seltener, z.B. nur beim Laden oder wenn Module hinzugefügt/entfernt wurden.
-    populateDbAreaFilter(moduleDatabase); // Übergib die *gesamte* DB für die Filteroptionen
-
-    // 8. Event Delegation sicherstellen (sollte durch DOMContentLoaded abgedeckt sein, aber zur Sicherheit)
-    if (!tableBody.hasAttribute('data-listeners-added')) {
+    // Event Delegation Listener (sollte schon existieren)
+    if (tableBody && !tableBody.hasAttribute('data-listeners-added')) {
+        console.log("Füge Event Listener zum DB-Tabellenkörper hinzu (innerhalb update)."); // Debugging
         tableBody.setAttribute('data-listeners-added', 'true');
-        tableBody.addEventListener('click', handleModuleDatabaseTableClick); // Stelle sicher, dass dieser Handler auch fav/hide behandelt
+        tableBody.addEventListener('click', handleModuleDatabaseTableClick);
     }
 }
 
