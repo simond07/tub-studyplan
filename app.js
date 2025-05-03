@@ -142,8 +142,9 @@ function renderAreas() {
     const semesterContainer = document.getElementById('semesterContainer');
 
     areasContainer.innerHTML = '';
-    moduleAreaSelect.innerHTML = '<option value="">Bereich auswählen</option>';
-    parentAreaSelect.innerHTML = '<option value="">Kein Übergeordneter Bereich</option>';
+    populateAreaSelect(moduleAreaSelect, true); // Mit "Bitte wählen"
+    populateAreaSelect(parentAreaSelect, true); // Mit "Bitte wählen" (für Top-Level)
+
 
     function renderAreaHierarchy(parentId = null, level = 0) {
         const filteredAreas = areas.filter(area => area.parentId === parentId);
@@ -554,7 +555,7 @@ function openAreaEditModal(area) {
     document.getElementById('editAreaLP').value = area.creditPoints;
 
     const parentSelect = document.getElementById('editAreaParent');
-    parentSelect.innerHTML = '<option value="">Kein Übergeordneter Bereich</option>';
+    populateAreaSelect(parentSelect, true, area.id, area.parentId);
 
     const possibleParents = areas.filter(a => {
         if (a.id === area.id) return false;
@@ -1635,39 +1636,206 @@ function updateModuleDatabaseTable() {
     lucide.createIcons();
 }
 
+/**
+ * Befüllt ein Select-Element mit den Bereichen aus der `areas`-Liste.
+ * @param {HTMLSelectElement} selectElement Das zu befüllende Select-Element.
+ * @param {boolean} includeEmptyOption Ob eine leere "Bitte wählen"-Option eingefügt werden soll.
+ * @param {string|null} excludeAreaId Eine Area-ID, die nicht als Option angezeigt werden soll (nützlich für Parent-Select).
+ * @param {string|null} preselectId Eine Area-ID, die vorausgewählt werden soll.
+ */
+function populateAreaSelect(selectElement, includeEmptyOption = true, excludeAreaId = null, preselectId = null) {
+    selectElement.innerHTML = ''; // Bestehende Optionen löschen
+    if (includeEmptyOption) {
+        selectElement.innerHTML = '<option value="">Bitte wählen...</option>';
+    }
+
+    // Rekursive Funktion zum Hinzufügen der Optionen mit Einrückung
+    function addOptionsRecursive(parentId = null, level = 0) {
+        const children = areas.filter(area => area.parentId === parentId);
+        children.sort((a, b) => a.name.localeCompare(b.name)); // Sortieren nach Namen
+
+        children.forEach(area => {
+            // Überspringe die ausgeschlossene ID (z.B. beim Bearbeiten eines Bereichs dessen eigene ID im Parent-Select)
+            if (area.id === excludeAreaId) return;
+
+            const option = document.createElement('option');
+            option.value = area.id;
+            // Zeige LP nur an, wenn > 0 oder Hauptbereich
+            const lpText = (area.creditPoints > 0 || !area.parentId) ? ` (${area.creditPoints} LP)` : '';
+            // Einrückung für Hierarchie
+            option.textContent = '  '.repeat(level) + area.name + lpText;
+            // Vorauswahl
+            if (area.id === preselectId) {
+                 option.selected = true;
+            }
+            selectElement.appendChild(option);
+
+            // Rekursiver Aufruf für Unterbereiche
+            addOptionsRecursive(area.id, level + 1);
+        });
+    }
+
+    addOptionsRecursive(null, 0); // Starte mit den Top-Level-Bereichen
+}
+
+
 // Event delegation handler for module database table
 function handleModuleDatabaseTableClick(event) {
-    const button = event.target.closest('button');
-    if (!button) return; // Exit if no button was clicked
-    
+    const button = event.target.closest('button[data-id]');
+    if (!button) return;
+
     const moduleId = button.getAttribute('data-id');
-    if (!moduleId) return; // Exit if no data-id
-    
+    if (!moduleId) return;
+
     const moduleDatabase = window.moduleDatabase.loadModuleDatabase();
     const moduleData = moduleDatabase.find(m => m.id === moduleId);
-    
-    if (!moduleData) return; // Exit if module not found
-    
+
+    if (!moduleData) return;
+
     if (button.classList.contains('add-to-plan-btn')) {
-        // Add to plan button clicked
-        document.getElementById('moduleTitleInput').value = moduleData.title;
-        document.getElementById('moduleCreditPointsInput').value = moduleData.creditPoints;
-        fillModuleFormWithData(moduleData);
-        document.getElementById('moduleTitleInput').scrollIntoView({ behavior: 'smooth' });
+        // **NEU: Rufe das Modal zur Bereichs-/Semesterauswahl auf**
+        promptAreaAndSemesterForDbModule(moduleData);
+
+        // **ALT (wird nicht mehr direkt genutzt für diesen Button):**
+        // fillModuleFormWithData(moduleData);
+        // document.getElementById('moduleTitleInput').scrollIntoView({ behavior: 'smooth' });
     }
     else if (button.classList.contains('edit-db-module-btn')) {
-        // Edit button clicked
+        // Bearbeiten in DB (unverändert)
         openModuleEditModal(moduleData, true);
     }
     else if (button.classList.contains('remove-db-module-btn')) {
-        // Remove button clicked
+        // Löschen aus DB (unverändert)
         if (confirm('Sind Sie sicher, dass Sie dieses Modul aus der Datenbank löschen möchten?')) {
             if (window.moduleDatabase.removeModuleFromDatabase(moduleId)) {
                 updateModuleDatabaseCount();
                 updateModuleDatabaseTable();
-                alert('Modul erfolgreich aus der Datenbank entfernt.');
+                // Optional: Alert entfernen oder anpassen
+                // alert('Modul erfolgreich aus der Datenbank entfernt.');
             }
         }
+    }
+}
+
+
+/**
+ * Öffnet das Modal, um Bereich und Semester für ein DB-Modul auszuwählen.
+ * @param {object} moduleData Die Daten des Moduls aus der Datenbank.
+ */
+function promptAreaAndSemesterForDbModule(moduleData) {
+    const modal = document.getElementById('dbModuleAddModal');
+    const form = document.getElementById('dbModuleAddForm');
+    const areaSelect = document.getElementById('dbModuleAreaSelect');
+    const semesterInput = document.getElementById('dbModuleSemesterInput');
+    const moduleNameSpan = document.getElementById('dbModalModuleName');
+    const moduleLPSpan = document.getElementById('dbModalModuleLP');
+    const moduleDataInput = document.getElementById('dbModalModuleData'); // Hidden input
+
+    // Modal-Inhalt füllen
+    moduleNameSpan.textContent = moduleData.title;
+    moduleLPSpan.textContent = moduleData.creditPoints;
+    moduleDataInput.value = JSON.stringify(moduleData); // Moduldaten für später speichern
+
+    // Bereichs-Dropdown füllen
+    populateAreaSelect(areaSelect, true); // true -> "Bitte wählen" Option
+
+    // Semester zurücksetzen
+    semesterInput.value = '1';
+
+    // Fehler-Nachrichten zurücksetzen
+    document.getElementById('dbModalAreaError').classList.add('hidden');
+    document.getElementById('dbModalSemesterError').classList.add('hidden');
+
+    // Event Listener für das Formular (überschreibt ggf. alte Listener)
+    form.onsubmit = handleDbModuleAddConfirm;
+
+    // Listener für Schließen/Abbrechen
+    document.getElementById('closeDbAddModalBtn').onclick = closeDbModuleAddModal;
+    document.getElementById('cancelDbAddBtn').onclick = closeDbModuleAddModal;
+
+    // Modal anzeigen
+    modal.classList.remove('hidden');
+    areaSelect.focus(); // Fokus auf das erste wichtige Feld
+}
+
+/**
+ * Verarbeitet die Bestätigung im DB-Modul-Hinzufügen-Modal.
+ * @param {Event} event Das Submit-Event des Formulars.
+ */
+function handleDbModuleAddConfirm(event) {
+    event.preventDefault(); // Standard-Formular-Submit verhindern
+
+    const areaSelect = document.getElementById('dbModuleAreaSelect');
+    const semesterInput = document.getElementById('dbModuleSemesterInput');
+    const areaError = document.getElementById('dbModalAreaError');
+    const semesterError = document.getElementById('dbModalSemesterError');
+    const moduleDataInput = document.getElementById('dbModalModuleData');
+
+    const areaId = areaSelect.value;
+    const semester = parseInt(semesterInput.value);
+    const moduleData = JSON.parse(moduleDataInput.value);
+
+    let isValid = true;
+    areaError.classList.add('hidden');
+    semesterError.classList.add('hidden');
+
+    // Validierung
+    if (!areaId) {
+        areaError.classList.remove('hidden');
+        isValid = false;
+    }
+    if (!semester || semester < 1) {
+        semesterError.classList.remove('hidden');
+        isValid = false;
+    }
+
+    if (!isValid) {
+        return; // Abbruch, wenn Validierung fehlschlägt
+    }
+
+    // Neues Modul-Objekt für die `courses`-Liste erstellen
+    const newCourseInstance = {
+        // Eindeutige ID für diese *Instanz* im Plan
+        id: 'module_plan_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        title: moduleData.title,
+        creditPoints: moduleData.creditPoints,
+        areaId: areaId,       // Aus dem Modal ausgewählt
+        semester: semester,   // Aus dem Modal ausgewählt
+        // Übernehme relevante Felder aus der DB-Definition
+        examType: moduleData.examType || 'schriftlich',
+        language: moduleData.language || 'de',
+        semester_offered: moduleData.semester_offered || 'Beides',
+        link: moduleData.link || '',
+        description: moduleData.description || '', // Beschreibung kann nützlich sein
+        type: moduleData.type && moduleData.type.length > 0 ? moduleData.type : ['VL'], // Default-Typ ggf.
+        // Verantwortlicher/Fachgebiet werden *nicht* automatisch übernommen,
+        // da sie zur DB-Definition gehören, nicht zur Plan-Instanz.
+        // Könnten optional hinzugefügt werden, falls gewünscht.
+        responsible: '',
+        department: ''
+    };
+
+    // Zur Kursliste hinzufügen
+    courses.push(newCourseInstance);
+
+    // Speichern und UI aktualisieren
+    saveToLocalStorage();
+    renderAreas(); // Rendert Bereiche und Semester neu
+
+    // Modal schließen
+    closeDbModuleAddModal();
+}
+
+/**
+ * Schließt das Modal zum Hinzufügen von DB-Modulen.
+ */
+function closeDbModuleAddModal() {
+    const modal = document.getElementById('dbModuleAddModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        // Optional: Formular zurücksetzen, falls nötig
+        document.getElementById('dbModuleAddForm').reset();
+        document.getElementById('dbModalModuleData').value = ''; // Wichtig: gespeicherte Daten löschen
     }
 }
 

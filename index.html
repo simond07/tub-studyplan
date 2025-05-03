@@ -409,7 +409,46 @@
                 </form>
             </div>
         </div>
-
+    </div>
+    <div id="dbModuleAddModal" class="fixed inset-0 bg-gray-800 bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 w-full max-w-lg shadow-xl">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="text-xl font-semibold">Modul zum Plan hinzufügen</h3>
+                <!-- Schließen-Button (einfaches X) -->
+                <button id="closeDbAddModalBtn" type="button" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+            </div>
+            <!-- Form innerhalb des Modals -->
+            <form id="dbModuleAddForm" class="space-y-4">
+                <!-- Modulinfo (nur Anzeige) -->
+                <div class="mb-3">
+                    <p class="text-sm text-gray-600">Modul:</p>
+                    <p><strong id="dbModalModuleName" class="text-base"></strong> (<span id="dbModalModuleLP" class="text-sm"></span> LP)</p>
+                </div>
+                 <!-- Bereichsauswahl -->
+                <div class="mb-3">
+                    <label for="dbModuleAreaSelect" class="block text-sm font-medium text-gray-700 mb-1">Bereich zuordnen *</label>
+                    <select id="dbModuleAreaSelect" class="border p-2 w-full rounded" required>
+                        <!-- Optionen werden dynamisch via JS gefüllt -->
+                        <option value="">Bitte wählen...</option>
+                    </select>
+                     <p id="dbModalAreaError" class="text-red-500 text-xs mt-1 hidden">Bitte wählen Sie einen Bereich.</p>
+                </div>
+                 <!-- Semesterauswahl -->
+                <div class="mb-4">
+                    <label for="dbModuleSemesterInput" class="block text-sm font-medium text-gray-700 mb-1">Semester zuordnen *</label>
+                    <input type="number" id="dbModuleSemesterInput" min="1" value="1" class="border p-2 w-full rounded" required>
+                     <p id="dbModalSemesterError" class="text-red-500 text-xs mt-1 hidden">Bitte geben Sie ein gültiges Semester (>= 1) ein.</p>
+                </div>
+                <!-- Verstecktes Feld zum Speichern der Modul-Rohdaten -->
+                <input type="hidden" id="dbModalModuleData">
+    
+                <!-- Buttons -->
+                <div class="flex justify-end gap-3 pt-3 border-t mt-4">
+                    <button type="button" id="cancelDbAddBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded text-sm">Abbrechen</button>
+                    <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm">Hinzufügen</button>
+                </div>
+            </form>
+        </div>
     </div>
     <script src="module-database.js"></script>
     <script src="import-export.js"></script>
