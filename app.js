@@ -9,6 +9,7 @@ let dbSelectedArea = '';
 let dbCurrentAdvancedFilter = null; // Das aktuell angewendete erweiterte Filterobjekt
 let savedDbFilters = []; // Geladene Filter aus localStorage
 let dbShowHidden = false;
+let startSemester = { type: 'WiSe', year: 2024 };
 
 // Clean area name function - improved to handle trailing numbers and extra whitespace
 function cleanAreaName(name) {
@@ -101,6 +102,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const saveCurrentFilterBtn = document.getElementById('saveCurrentFilterBtn'); // Button zum Speichern aktiver Filter
     const showHiddenCheckbox = document.getElementById('showHiddenDbModules');
 
+    // Lade Startsemester und setze UI
+    startSemester = getStartSemester();
+    const startTypeSelect = document.getElementById('startSemesterType');
+    const startYearInput = document.getElementById('startYearInput');
+    if (startTypeSelect) startTypeSelect.value = startSemester.type;
+    if (startYearInput) startYearInput.value = startSemester.year;
+    // Event Listener für Startsemester Speichern
+    const saveStartBtn = document.getElementById('saveStartSemesterBtn');
+    if (saveStartBtn) saveStartBtn.addEventListener('click', saveStartSemester);
+    // Lade gespeicherte Filter
+    savedDbFilters = window.moduleDatabase.loadDbFilters();
+    populateSavedFiltersDropdown();
+
+    // Event Listener für Filter/Suche/Sortierung
     if (showHiddenCheckbox) showHiddenCheckbox.addEventListener('change', handleShowHiddenToggle);
     if (dbSearchInput) dbSearchInput.addEventListener('input', handleDbSearch);
     if (dbAreaFilterSelect) dbAreaFilterSelect.addEventListener('change', handleDbAreaFilter);
@@ -191,6 +206,103 @@ function handleDbSort(event) {
     }
 
     updateModuleDatabaseTable(); // Tabelle neu rendern mit neuer Sortierung
+}
+
+/**
+ * Holt das gespeicherte Startsemester aus localStorage.
+ * @returns {{type: string, year: number}} Das Startsemester-Objekt.
+ */
+function getStartSemester() {
+    const stored = localStorage.getItem('studyStartSemester');
+    if (stored) {
+        try {
+            const parsed = JSON.parse(stored);
+            // Validierung
+            if ((parsed.type === 'WiSe' || parsed.type === 'SoSe') && typeof parsed.year === 'number' && parsed.year > 1990) {
+                return parsed;
+            }
+        } catch (e) {
+            console.error("Fehler beim Parsen des Startsemesters:", e);
+        }
+    }
+    // Default zurückgeben, wenn nichts gespeichert oder ungültig
+    return { type: 'WiSe', year: new Date().getFullYear() -1 }; // Default: letztes WiSe
+}
+
+/**
+ * Speichert das aktuell in der UI ausgewählte Startsemester.
+ */
+function saveStartSemester() {
+    const typeSelect = document.getElementById('startSemesterType');
+    const yearInput = document.getElementById('startYearInput');
+    const year = parseInt(yearInput.value);
+    const type = typeSelect.value;
+
+    if (isNaN(year) || year < 2000 || year > 3099) {
+        alert("Bitte geben Sie ein gültiges Jahr (z.B. 2023) für den Studienstart ein.");
+        yearInput.focus();
+        return;
+    }
+
+    startSemester = { type: type, year: year };
+    try {
+        localStorage.setItem('studyStartSemester', JSON.stringify(startSemester));
+        // Optional: Visuelles Feedback geben
+        const btn = document.getElementById('saveStartSemesterBtn');
+        if(btn) {
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check mr-1"></i> Gespeichert';
+            btn.classList.add('bg-green-500');
+            btn.classList.remove('bg-indigo-500', 'hover:bg-indigo-600');
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.classList.remove('bg-green-500');
+                btn.classList.add('bg-indigo-500', 'hover:bg-indigo-600');
+            }, 1500);
+        }
+         console.log("Startsemester gespeichert:", startSemester);
+         // Optional: Semestervorschläge in offenen Modals aktualisieren, falls nötig
+    } catch (e) {
+        console.error("Fehler beim Speichern des Startsemesters:", e);
+        alert("Startsemester konnte nicht gespeichert werden.");
+    }
+}
+
+/**
+ * Berechnet Vorschläge für Semester basierend auf Startdatum und Turnus.
+ * @param {string} turnus Der Turnus ('SoSe', 'WiSe', 'Beides', '').
+ * @returns {number[]} Ein Array mit vorgeschlagenen Semesternummern (1-basiert).
+ */
+function calculateSemesterSuggestions(turnus) {
+    const suggestions = [];
+    const maxSemester = 10; // Bis zu welchem Semester sollen Vorschläge gemacht werden?
+    const currentStart = getStartSemester(); // Immer aktuelles Startsemester holen
+
+    for (let semesterNum = 1; semesterNum <= maxSemester; semesterNum++) {
+        // Berechne Jahr und Typ des aktuellen Fachsemesters
+        const semesterOffset = semesterNum - 1;
+        let currentYear = currentStart.year;
+        let currentType = currentStart.type;
+
+        if (currentStart.type === 'SoSe') {
+            currentYear += Math.floor(semesterOffset / 2);
+            currentType = (semesterOffset % 2 === 0) ? 'SoSe' : 'WiSe';
+        } else { // Start im WiSe
+            currentYear += Math.ceil(semesterOffset / 2);
+            currentType = (semesterOffset % 2 === 0) ? 'WiSe' : 'SoSe';
+        }
+
+        // Prüfe, ob der Turnus passt
+        const turnusMatches =
+            turnus === 'Beides' ||
+            turnus === '' || // Kein Turnus -> immer anbieten? Oder nie? Hier: immer
+            turnus === currentType;
+
+        if (turnusMatches) {
+            suggestions.push(semesterNum);
+        }
+    }
+    return suggestions;
 }
 
 // Function to choose a color from the Tailwind colors for each semester
@@ -2406,33 +2518,65 @@ function promptAreaAndSemesterForDbModule(moduleData) {
     const semesterInput = document.getElementById('dbModuleSemesterInput');
     const moduleNameSpan = document.getElementById('dbModalModuleName');
     const moduleLPSpan = document.getElementById('dbModalModuleLP');
-    const moduleDataInput = document.getElementById('dbModalModuleData'); // Hidden input
+    const moduleTurnusSpan = document.getElementById('dbModalModuleTurnus'); // NEU
+    const moduleDataInput = document.getElementById('dbModalModuleData');
+    const suggestionsContainer = document.getElementById('dbModuleSemesterSuggestions'); // NEU
 
     // Modal-Inhalt füllen
     moduleNameSpan.textContent = moduleData.title;
     moduleLPSpan.textContent = moduleData.creditPoints;
-    moduleDataInput.value = JSON.stringify(moduleData); // Moduldaten für später speichern
+    moduleTurnusSpan.textContent = moduleData.semester_offered || 'k.A.'; // Zeige Turnus an
+    moduleDataInput.value = JSON.stringify(moduleData);
 
-    // Bereichs-Dropdown füllen
-    populateAreaSelect(areaSelect, true); // true -> "Bitte wählen" Option
+    // Bereichs-Dropdown füllen und versuchen vorzuwählen
+    let preselectedAreaId = null;
+    if (moduleData.areaName) {
+        // Finde die areaId im *Plan*, die dem areaName aus der DB entspricht (case-insensitive, cleaned)
+        const cleanDbAreaName = cleanAreaName(moduleData.areaName);
+        const matchingPlanArea = areas.find(a => cleanAreaName(a.name) === cleanDbAreaName);
+        if (matchingPlanArea) {
+            preselectedAreaId = matchingPlanArea.id;
+        }
+    }
+    populateAreaSelect(areaSelect, true, null, preselectedAreaId); // Mit Vorauswahl
 
-    // Semester zurücksetzen
-    semesterInput.value = '1';
+    // Semester zurücksetzen und Vorschläge generieren/anzeigen
+    semesterInput.value = '1'; // Standardwert
+    suggestionsContainer.innerHTML = ''; // Alte Vorschläge leeren
+
+    const turnus = moduleData.semester_offered || 'Beides'; // Default zu 'Beides' wenn leer
+    const suggestions = calculateSemesterSuggestions(turnus);
+
+    if (suggestions.length > 0) {
+         // Ersten Vorschlag als Default setzen
+         semesterInput.value = suggestions[0];
+
+         suggestions.forEach(semNum => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = semNum;
+            button.className = 'bg-gray-200 hover:bg-blue-200 text-xs px-1.5 py-0.5 rounded';
+            button.onclick = () => {
+                semesterInput.value = semNum;
+                 // Optional: Fokus auf Hinzufügen-Button setzen
+                 // modal.querySelector('button[type="submit"]').focus();
+            };
+            suggestionsContainer.appendChild(button);
+        });
+    }
+
 
     // Fehler-Nachrichten zurücksetzen
     document.getElementById('dbModalAreaError').classList.add('hidden');
     document.getElementById('dbModalSemesterError').classList.add('hidden');
 
-    // Event Listener für das Formular (überschreibt ggf. alte Listener)
+    // Event Listener (wie zuvor)
     form.onsubmit = handleDbModuleAddConfirm;
-
-    // Listener für Schließen/Abbrechen
     document.getElementById('closeDbAddModalBtn').onclick = closeDbModuleAddModal;
     document.getElementById('cancelDbAddBtn').onclick = closeDbModuleAddModal;
 
-    // Modal anzeigen
     modal.classList.remove('hidden');
-    areaSelect.focus(); // Fokus auf das erste wichtige Feld
+    areaSelect.focus();
 }
 
 /**

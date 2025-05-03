@@ -27,20 +27,31 @@
 <body class="bg-neutral-50">
     <div class="container mx-auto p-4">
         <!-- Header (unverändert) -->
-        <div class="flex flex-wrap justify-between items-center mb-6">
-           <h1 class="text-3xl font-bold">Semesterplan Visualisierung</h1>
-            <div class="flex flex-wrap gap-2 mt-2 md:mt-0">
-                <button id="exportButton" onclick="saveToFile()" class="bg-purple-500 hover:bg-purple-600 text-white p-2 rounded">
-                    <i class="fas fa-file-export mr-1"></i>Exportieren
-                </button>
-                <button id="importButton" class="bg-purple-700 hover:bg-purple-800 text-white p-2 rounded">
-                    <i class="fas fa-file-import mr-1"></i>Importieren
-                </button>
-                <a href="module-scraper.html" class="bg-teal-500 hover:bg-teal-600 text-white p-2 rounded inline-block">
-                    <i class="fas fa-download mr-1"></i>TU Berlin Module
-                </a>
-            </div>
-        </div>
+        <div class="flex flex-wrap justify-between items-center mb-6 gap-1">
+            <h1 class="text-3xl font-bold">Semesterplan Visualisierung</h1>
+             <!-- NEU: Startsemester Eingabe -->
+             <div class="flex items-center gap-2 mt-2 md:mt-0">
+                 <label for="startYearInput" class="text-sm font-medium text-gray-700">Studienstart:</label>
+                 <select id="startSemesterType" class="border p-1 rounded text-sm bg-white w-20">
+                     <option value="WiSe">WiSe</option>
+                     <option value="SoSe">SoSe</option>
+                 </select>
+                 <input type="number" id="startYearInput" placeholder="Jahr (z.B. 2023)" value="2023" min="2000" max="3099" class="border p-1 rounded text-sm w-16">
+                 <button id="saveStartSemesterBtn" class="bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1 rounded text-xs">Speichern</button>
+             </div>
+              <!-- Export/Import/Scraper Buttons -->
+             <div class="flex flex-wrap gap-2 mt-2 md:mt-0">
+                  <button id="exportButton" onclick="saveToFile()" class="bg-purple-500 hover:bg-purple-600 text-white p-2 rounded">
+                     <i class="fas fa-file-export mr-1"></i>Exportieren
+                 </button>
+                 <button id="importButton" class="bg-purple-700 hover:bg-purple-800 text-white p-2 rounded">
+                     <i class="fas fa-file-import mr-1"></i>Importieren
+                 </button>
+                 <a href="module-scraper.html" class="bg-teal-500 hover:bg-teal-600 text-white p-2 rounded inline-block">
+                     <i class="fas fa-download mr-1"></i>TU Berlin Module
+                 </a>
+             </div>
+         </div>
 
         <!-- Bereich hinzufügen Form (Validierungstext angepasst) -->
         <div class="mb-6 bg-white p-4 rounded shadow">
@@ -542,41 +553,43 @@
         <div class="bg-white rounded-lg p-6 w-full max-w-lg shadow-xl">
             <div class="flex justify-between items-center mb-4 border-b pb-2">
                 <h3 class="text-xl font-semibold">Modul zum Plan hinzufügen</h3>
-                <!-- Schließen-Button (einfaches X) -->
                 <button id="closeDbAddModalBtn" type="button" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
             </div>
-            <!-- Form innerhalb des Modals -->
             <form id="dbModuleAddForm" class="space-y-4">
-                <!-- Modulinfo (nur Anzeige) -->
                 <div class="mb-3">
                     <p class="text-sm text-gray-600">Modul:</p>
                     <p><strong id="dbModalModuleName" class="text-base"></strong> (<span id="dbModalModuleLP" class="text-sm"></span> LP)</p>
+                     <p class="text-xs text-gray-500 mt-1">Turnus: <span id="dbModalModuleTurnus"></span></p> <!-- Turnus Info -->
                 </div>
-                 <!-- Bereichsauswahl -->
                 <div class="mb-3">
                     <label for="dbModuleAreaSelect" class="block text-sm font-medium text-gray-700 mb-1">Bereich zuordnen *</label>
                     <select id="dbModuleAreaSelect" class="border p-2 w-full rounded" required>
-                        <!-- Optionen werden dynamisch via JS gefüllt -->
                         <option value="">Bitte wählen...</option>
                     </select>
                      <p id="dbModalAreaError" class="text-red-500 text-xs mt-1 hidden">Bitte wählen Sie einen Bereich.</p>
                 </div>
-                 <!-- Semesterauswahl -->
+                 <!-- Semester Auswahl mit Vorschlägen -->
                 <div class="mb-4">
                     <label for="dbModuleSemesterInput" class="block text-sm font-medium text-gray-700 mb-1">Semester zuordnen *</label>
-                    <input type="number" id="dbModuleSemesterInput" min="1" value="1" class="border p-2 w-full rounded" required>
-                     <p id="dbModalSemesterError" class="text-red-500 text-xs mt-1 hidden">Bitte geben Sie ein gültiges Semester (>= 1) ein.</p>
+                     <div class="flex items-center gap-2">
+                        <input type="number" id="dbModuleSemesterInput" min="1" value="1" class="border p-2 w-40 rounded" required> <!-- Breite angepasst -->
+                        <!-- NEU: Container für Semestervorschläge -->
+                        <div id="dbModuleSemesterSuggestions" class="flex flex-wrap gap-1">
+                            <!-- Vorschläge werden hier via JS eingefügt -->
+                        </div>
+                    </div>
+                    <p id="dbModalSemesterError" class="text-red-500 text-xs mt-1 hidden">Bitte geben Sie ein gültiges Semester (>= 1) ein.</p>
                 </div>
-                <!-- Verstecktes Feld zum Speichern der Modul-Rohdaten -->
+
                 <input type="hidden" id="dbModalModuleData">
-    
-                <!-- Buttons -->
+
                 <div class="flex justify-end gap-3 pt-3 border-t mt-4">
                     <button type="button" id="cancelDbAddBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded text-sm">Abbrechen</button>
                     <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm">Hinzufügen</button>
                 </div>
             </form>
         </div>
+    </div>
     </div>
     <script src="module-database.js"></script>
     <script src="import-export.js"></script>
