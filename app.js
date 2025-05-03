@@ -121,18 +121,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Function to choose a color from the Tailwind colors for each semester
 function generateColor(semester) {
-    // Konstante Farben für Konsistenz
-     const semesterColors = [
-        'border-red-400', 'border-blue-400', 'border-green-400', 'border-yellow-400',
-        'border-purple-400', 'border-pink-400', 'border-indigo-400', 'border-teal-400',
-        'border-orange-400', 'border-cyan-400'
+    const tailwindColors = [
+        'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500',
+        'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
+        // Ggf. mehr Farben hinzufügen
     ];
-     // Nimmt den Semesterwert (als Zahl) und wählt eine Farbe aus der Liste
      const semesterIndex = parseInt(semester);
      if (!isNaN(semesterIndex) && semesterIndex > 0) {
-         return semesterColors[(semesterIndex - 1) % semesterColors.length];
+        // Verwende /30 für Transparenz
+        return tailwindColors[(semesterIndex - 1) % tailwindColors.length] + '/30';
      }
-     return 'border-gray-400'; // Fallback
+     return 'bg-gray-500/30'; // Fallback
 }
 
 // Bereiche rendern
@@ -140,129 +139,137 @@ function renderAreas() {
     const areasContainer = document.getElementById('areasContainer');
     const moduleAreaSelect = document.getElementById('moduleAreaSelect');
     const parentAreaSelect = document.getElementById('parentAreaSelect');
-    const semesterContainer = document.getElementById('semesterContainer'); // Nötig für updateSemesterView
+    const semesterContainer = document.getElementById('semesterContainer');
 
     areasContainer.innerHTML = '';
     moduleAreaSelect.innerHTML = '<option value="">Bereich auswählen</option>';
     parentAreaSelect.innerHTML = '<option value="">Kein Übergeordneter Bereich</option>';
 
-    // Funktion zum rekursiven Rendern der Bereiche
     function renderAreaHierarchy(parentId = null, level = 0) {
         const filteredAreas = areas.filter(area => area.parentId === parentId);
-
-        filteredAreas.sort((a, b) => a.name.localeCompare(b.name)); // Optional: Sortieren
+        filteredAreas.sort((a, b) => a.name.localeCompare(b.name));
 
         filteredAreas.forEach((area) => {
-            // Bereich zum Select hinzufügen
-            const option = document.createElement('option');
+            // Select-Optionen (unverändert)
+             const option = document.createElement('option');
             option.value = area.id;
-            // Zeige 0 LP nicht an, wenn es 0 ist und ein Unterbereich ist
-            const lpText = (area.parentId && area.creditPoints === 0) ? '' : ` (${area.creditPoints} LP)`;
+            const lpText = (area.creditPoints > 0 || !area.parentId) ? ` (${area.creditPoints} LP)` : '';
             option.textContent = '  '.repeat(level) + area.name + lpText;
             moduleAreaSelect.appendChild(option);
 
-            // Bereich zum Parent-Select hinzufügen
             const parentOption = document.createElement('option');
             parentOption.value = area.id;
             parentOption.textContent = '  '.repeat(level) + area.name + lpText;
             parentAreaSelect.appendChild(parentOption);
 
+
+            // Bereichs-Div (kompakter)
             const areaDiv = document.createElement('div');
-            areaDiv.className = 'bg-white rounded-md shadow px-2 py-4 mb-4 flex flex-col justify-between gap-2 border-l-4'; // Border hinzugefügt
-             // Style für Einrückung und Randfarbe basierend auf Level
-            areaDiv.style.marginLeft = `${level * 25}px`; // Etwas mehr Einrückung
-            const borderColors = ['border-blue-200', 'border-green-200', 'border-yellow-200', 'border-purple-200', 'border-pink-200'];
+            // Weniger Padding/Margin, behalte Rand
+             areaDiv.className = 'area-block bg-white rounded-md shadow-sm px-2 py-2 mb-1.5'; // py-2, mb-1.5, shadow-sm
+            areaDiv.style.marginLeft = `${level * 20}px`;
+             const borderColors = ['border-blue-200', 'border-green-200', 'border-yellow-200', 'border-purple-200', 'border-pink-200'];
             areaDiv.classList.add(borderColors[level % borderColors.length]);
 
 
+            // Bereichs-Header mit Titel und LP-Nutzung
             const areaHeader = document.createElement('div');
-            areaHeader.className = 'flex justify-between items-center w-full px-2';
+            // items-baseline für bessere Ausrichtung von Text unterschiedlicher Größe
+            areaHeader.className = 'flex justify-between items-baseline w-full px-1'; // px-1
 
+            const titleAndUsageContainer = document.createElement('div');
+            titleAndUsageContainer.className = 'flex items-baseline gap-x-2'; // gap-x-2
+
+            // Bereichstitel (Standard Schriftgröße)
             const areaTitle = document.createElement('h2');
-            // Zeige LP nur an, wenn sie > 0 sind oder es ein Hauptbereich ist
-            const titleLPText = (area.creditPoints > 0 || !area.parentId) ? ` (${area.creditPoints} LP)` : '';
-            areaTitle.innerText = `${area.name}${titleLPText}`;
-            areaTitle.className = 'text-lg font-bold';
-            areaHeader.appendChild(areaTitle);
+            const titleLPText = (area.creditPoints > 0 || !area.parentId) ? `(${area.creditPoints} LP)` : '';
+            areaTitle.innerText = `${area.name} ${titleLPText}`; // LP-Anzeige direkt dran
+            areaTitle.className = 'text-base font-semibold'; // text-base (Standard), font-semibold
+            titleAndUsageContainer.appendChild(areaTitle);
 
+            // LP-Nutzung (kleiner daneben)
+            const usageLP = calculateAreaUsageLP(area.id);
+            const lpUsageDiv = document.createElement('div');
+            lpUsageDiv.className = 'text-xs text-gray-500 whitespace-nowrap'; // Kleinere Schrift, kein Umbruch
+             const capacityText = (area.creditPoints > 0 || !area.parentId) ? ` / ${area.creditPoints} LP` : ' LP';
+             lpUsageDiv.innerHTML = `(${usageLP}${capacityText} genutzt)`; // Kompaktere Darstellung
+
+             // Farbliche Hervorhebung bei Über-/Vollauslastung (nur wenn Kapazität relevant)
+            if ((area.creditPoints > 0 || !area.parentId)) {
+                if (usageLP > area.creditPoints) {
+                    lpUsageDiv.classList.add('text-red-600', 'font-medium');
+                    lpUsageDiv.classList.remove('text-gray-500');
+                } else if (usageLP === area.creditPoints && area.creditPoints > 0) {
+                    lpUsageDiv.classList.add('text-green-600', 'font-medium');
+                    lpUsageDiv.classList.remove('text-gray-500');
+                }
+            }
+            titleAndUsageContainer.appendChild(lpUsageDiv);
+
+            areaHeader.appendChild(titleAndUsageContainer);
+
+            // Buttons (kleiner)
             const buttonContainer = document.createElement('div');
-            buttonContainer.className = 'flex gap-2 ml-auto items-center pl-4'; // ml-auto für Rechtsbündigkeit
+            buttonContainer.className = 'flex gap-1.5 ml-auto items-center pl-2'; // gap-1.5
 
             const editButton = document.createElement('button');
-            editButton.innerHTML = '<i data-lucide="edit" class="size-4"></i>';
-            editButton.classList.add('area-edit-btn', 'text-blue-600', 'hover:text-blue-800');
+            editButton.innerHTML = '<i data-lucide="edit" class="size-3.5"></i>'; // size-3.5
+            editButton.classList.add('area-edit-btn', 'text-blue-500', 'hover:text-blue-700');
             editButton.setAttribute('data-id', area.id);
             buttonContainer.appendChild(editButton);
 
             const deleteButton = document.createElement('button');
-            deleteButton.innerHTML = '<i data-lucide="trash" class="size-4"></i>';
-            deleteButton.classList.add('area-delete-btn', 'text-red-600', 'hover:text-red-800');
+            deleteButton.innerHTML = '<i data-lucide="trash" class="size-3.5"></i>'; // size-3.5
+            deleteButton.classList.add('area-delete-btn', 'text-red-500', 'hover:text-red-700');
             deleteButton.setAttribute('data-id', area.id);
             buttonContainer.appendChild(deleteButton);
 
             areaHeader.appendChild(buttonContainer);
             areaDiv.appendChild(areaHeader);
 
-            // --- NEU: LP-Verbrauch anzeigen (rekursiv) ---
-            const usageLP = calculateAreaUsageLP(area.id);
-            const lpUsageDiv = document.createElement('div');
-            lpUsageDiv.className = 'text-sm px-2 mt-1'; // mt-1 hinzugefügt
 
-            // Zeige Kapazität nur an, wenn sie > 0 ist oder es ein Hauptbereich ist
-            if (area.creditPoints > 0 || !area.parentId) {
-                 lpUsageDiv.innerHTML = `<span>Verwendet: ${usageLP} von ${area.creditPoints} LP</span>`;
-                 if (usageLP > area.creditPoints) {
-                     lpUsageDiv.classList.add('text-red-500', 'font-bold');
-                 } else if (usageLP === area.creditPoints) {
-                     lpUsageDiv.classList.add('text-green-600');
-                 }
-            } else {
-                 // Für Unterbereiche mit 0 LP nur die verwendeten anzeigen
-                 lpUsageDiv.innerHTML = `<span>Verwendet: ${usageLP} LP</span>`;
-            }
-            areaDiv.appendChild(lpUsageDiv);
-            // --- ENDE NEU ---
-
-
+            // Modul-Liste (kompakter)
             const moduleList = document.createElement('div');
-            moduleList.className = 'mt-2 px-2'; // Abstand hinzugefügt
+            moduleList.className = 'mt-1.5 space-y-0.5 px-1'; // mt-1.5, space-y-0.5
 
             const areaModules = courses.filter(module => module.areaId === area.id);
-             areaModules.sort((a,b) => a.semester - b.semester || a.title.localeCompare(b.title)); // Sortieren
+            areaModules.sort((a,b) => a.semester - b.semester || a.title.localeCompare(b.title));
 
             areaModules.forEach((module) => {
-                 const moduleDiv = document.createElement('div');
-                moduleDiv.className = 'flex justify-between items-center bg-gray-100 p-2 rounded mb-1';
+                const moduleDiv = document.createElement('div');
+                // Weniger Padding, kein Hintergrund, Border unten
+                moduleDiv.className = 'module-item flex justify-between items-center p-1 border-t border-gray-100'; // p-1, border-t
+                // Standard Schriftgröße für Titel, kleinere Details
 
                 const moduleInfo = document.createElement('div');
-                moduleInfo.className = 'flex flex-col text-sm'; // text-sm für kompaktere Darstellung
+                moduleInfo.className = 'flex flex-col';
 
                 const moduleTitle = document.createElement('span');
-                moduleTitle.className = 'font-medium';
-                moduleTitle.innerText = `${module.title} (${module.creditPoints} LP, Sem: ${module.semester})`; // Sem: Abkürzung
+                moduleTitle.className = 'font-medium'; // Keine explizite Größenänderung -> Standard
+                moduleTitle.innerText = `${module.title} (${module.creditPoints} LP, Sem: ${module.semester})`;
                 moduleInfo.appendChild(moduleTitle);
 
-                // Details kompakter darstellen
                 const moduleDetails = document.createElement('span');
-                moduleDetails.className = 'text-xs text-gray-600'; // text-xs
-                const typeString = module.type && module.type.length > 0 ? module.type.join('/') : 'k.A.'; // '/' als Separator
+                moduleDetails.className = 'text-xs text-gray-600'; // Details bleiben klein
+                 const typeString = module.type && module.type.length > 0 ? module.type.join('/') : '-';
                 moduleDetails.innerText = `${typeString} | ${module.examType} | ${module.language} | ${module.semester_offered}`;
                 moduleInfo.appendChild(moduleDetails);
 
                 moduleDiv.appendChild(moduleInfo);
 
+                // Modul-Buttons (kleiner)
                 const moduleButtonContainer = document.createElement('div');
-                 moduleButtonContainer.className = 'flex gap-2 ml-auto items-center pl-2'; // ml-auto, pl-2
+                moduleButtonContainer.className = 'flex gap-1.5 ml-auto items-center pl-2'; // gap-1.5
 
                 const moduleEditButton = document.createElement('button');
-                moduleEditButton.innerHTML = '<i data-lucide="edit" class="size-4"></i>';
-                moduleEditButton.classList.add('module-edit-btn', 'text-blue-600', 'hover:text-blue-800'); // Farben hinzugefügt
+                moduleEditButton.innerHTML = '<i data-lucide="edit" class="size-3.5"></i>'; // size-3.5
+                moduleEditButton.classList.add('module-edit-btn', 'text-blue-500', 'hover:text-blue-700');
                 moduleEditButton.setAttribute('data-id', module.id);
                 moduleButtonContainer.appendChild(moduleEditButton);
 
                 const moduleDeleteButton = document.createElement('button');
-                moduleDeleteButton.innerHTML = '<i data-lucide="trash" class="size-4"></i>';
-                moduleDeleteButton.classList.add('module-delete-btn', 'text-red-600', 'hover:text-red-800'); // Farben hinzugefügt
+                moduleDeleteButton.innerHTML = '<i data-lucide="trash" class="size-3.5"></i>'; // size-3.5
+                moduleDeleteButton.classList.add('module-delete-btn', 'text-red-500', 'hover:text-red-700');
                 moduleDeleteButton.setAttribute('data-id', module.id);
                 moduleButtonContainer.appendChild(moduleDeleteButton);
 
@@ -273,17 +280,12 @@ function renderAreas() {
             areaDiv.appendChild(moduleList);
             areasContainer.appendChild(areaDiv);
 
-            // Rekursiv Unterbereiche rendern
             renderAreaHierarchy(area.id, level + 1);
         });
     }
 
-    // Starte mit Top-Level Bereichen (ohne Parent)
     renderAreaHierarchy(null);
-
-    // Semestercontainer aktualisieren (enthält jetzt Gesamt-LP-Berechnung)
-    updateSemesterView();
-
+    updateSemesterView(); // Aktualisiert auch Gesamt-LP
     lucide.createIcons();
 
     // Event delegation (unverändert, aber wichtig)
@@ -350,103 +352,99 @@ function updateSemesterView() {
     const semesterContainer = document.getElementById('semesterContainer');
     semesterContainer.innerHTML = '';
 
-    // Module nach Semestern sortieren
     const sortedModules = courses.slice().sort((a, b) => a.semester - b.semester || a.title.localeCompare(b.title));
-
-    // Module nach Semestern gruppieren
     const modulesBySemester = sortedModules.reduce((acc, module) => {
-        if (!acc[module.semester]) {
-            acc[module.semester] = [];
-        }
-        acc[module.semester].push(module);
+        (acc[module.semester] = acc[module.semester] || []).push(module);
         return acc;
     }, {});
 
-    let totalStudyPlanLPs = 0; // Variable für Gesamt-LP
+    let totalStudyPlanLPs = 0;
 
-    // Semester rendern und Gesamt-LP berechnen
     Object.entries(modulesBySemester)
-        .sort(([semA], [semB]) => parseInt(semA) - parseInt(semB)) // Nach Semesternummer sortieren
+        .sort(([semA], [semB]) => parseInt(semA) - parseInt(semB))
         .forEach(([semester, modules]) => {
             const semesterDiv = document.createElement('div');
-            // semesterDiv.className = `p-2 rounded-md shadow mb-4 ${generateColor(semester)}/30`; // Alte Farbe
-             semesterDiv.className = `p-3 rounded-lg shadow mb-4 border-l-4 ${generateColor(semester)}`; // Neue Optik mit Rand
-
+             // Weniger Padding, kein Shadow, nur Hintergrundfarbe, weniger Margin
+            semesterDiv.className = `p-2 rounded-md mb-2 ${generateColor(semester)}`;
 
             const totalLP = modules.reduce((sum, module) => sum + module.creditPoints, 0);
-            totalStudyPlanLPs += totalLP; // Zur Gesamtsumme addieren
+            totalStudyPlanLPs += totalLP;
 
             const semesterHeader = document.createElement('div');
-            semesterHeader.className = 'flex justify-between items-center mb-2';
+            semesterHeader.className = 'flex justify-between items-center mb-1.5'; // mb-1.5
 
             const semesterTitle = document.createElement('h3');
             semesterTitle.innerText = `Semester ${semester}`;
-            semesterTitle.className = 'text-xl font-bold';
+            semesterTitle.className = 'text-lg font-semibold'; // text-lg, font-semibold
             semesterHeader.appendChild(semesterTitle);
 
             const lpCounter = document.createElement('span');
-            lpCounter.className = 'py-1 px-3 rounded-full text-sm font-bold'; // Basis-Styling
+            lpCounter.className = 'py-0.5 px-2 rounded-full text-xs font-bold'; // Kleineres Padding/Schrift
             lpCounter.innerText = `${totalLP} LP`;
-
-            // Highlight basierend auf LP-Bereich
-            if (totalLP < 25) {
+             // Farben für LP-Bereich (unverändert)
+             if (totalLP < 25) {
                 lpCounter.classList.add('bg-yellow-200', 'text-yellow-800');
             } else if (totalLP > 33) {
                 lpCounter.classList.add('bg-red-200', 'text-red-800');
             } else {
                 lpCounter.classList.add('bg-green-200', 'text-green-800');
             }
-
             semesterHeader.appendChild(lpCounter);
             semesterDiv.appendChild(semesterHeader);
 
+            // Modulliste innerhalb des Semesters
+            const semesterModuleList = document.createElement('div');
+            semesterModuleList.className = 'space-y-0.5'; // Kompakter Abstand
+
             modules.forEach((module) => {
-                 const moduleDiv = document.createElement('div');
-                moduleDiv.className = 'flex justify-between items-center bg-white p-2 rounded mb-1 shadow-sm'; // Weißer Hintergrund, leichter Schatten
+                const moduleDiv = document.createElement('div');
+                 // Kompakteres Padding, Border unten, kein Hintergrund/Schatten
+                moduleDiv.className = 'module-item flex justify-between items-center py-1 px-1.5 border-b border-gray-400/30 last:border-b-0'; // py-1, px-1.5, border-b, last:border-b-0
 
                 const moduleArea = areas.find(area => area.id === module.areaId);
-                const areaName = moduleArea ? moduleArea.name : "Kein Bereich";
+                const areaName = moduleArea ? moduleArea.name : "k. Bereich"; // Kürzer
 
                 const moduleInfo = document.createElement('div');
-                moduleInfo.className = 'flex flex-col'; // Kompakter
+                moduleInfo.className = 'flex flex-col';
 
+                // Titel normale Größe
                 const moduleTitle = document.createElement('span');
-                moduleTitle.className = 'font-medium';
+                moduleTitle.className = 'font-medium leading-tight'; // Normale Größe, engerer Zeilenabstand
                 moduleTitle.innerText = `${module.title} (${module.creditPoints} LP)`;
                 moduleInfo.appendChild(moduleTitle);
 
+                // Details klein
                 const moduleDetails = document.createElement('span');
                 moduleDetails.className = 'text-xs text-gray-600';
-                 const typeString = module.type && module.type.length > 0 ? module.type.join('/') : 'k.A.';
-                moduleDetails.innerText = `Bereich: ${areaName} | ${typeString} | ${module.examType}`;
+                 const typeString = module.type && module.type.length > 0 ? module.type.join('/') : '-';
+                moduleDetails.innerText = `${areaName} | ${typeString} | ${module.examType}`;
                 moduleInfo.appendChild(moduleDetails);
 
                 moduleDiv.appendChild(moduleInfo);
 
+                // Buttons klein
                 const moduleButtonContainer = document.createElement('div');
-                moduleButtonContainer.className = 'flex gap-2 ml-auto items-center pl-2'; // ml-auto
+                moduleButtonContainer.className = 'flex gap-1.5 ml-auto items-center pl-2'; // gap-1.5
 
                 const moduleEditButton = document.createElement('button');
-                moduleEditButton.innerHTML = '<i data-lucide="edit" class="size-4"></i>';
+                moduleEditButton.innerHTML = '<i data-lucide="edit" class="size-3.5"></i>'; // size-3.5
                 moduleEditButton.classList.add('module-edit-btn', 'text-blue-600', 'hover:text-blue-800');
                 moduleEditButton.setAttribute('data-id', module.id);
                 moduleButtonContainer.appendChild(moduleEditButton);
 
                 const moduleDeleteButton = document.createElement('button');
-                moduleDeleteButton.innerHTML = '<i data-lucide="trash" class="size-4"></i>';
+                moduleDeleteButton.innerHTML = '<i data-lucide="trash" class="size-3.5"></i>'; // size-3.5
                 moduleDeleteButton.classList.add('module-delete-btn', 'text-red-600', 'hover:text-red-800');
                 moduleDeleteButton.setAttribute('data-id', module.id);
                 moduleButtonContainer.appendChild(moduleDeleteButton);
 
                 moduleDiv.appendChild(moduleButtonContainer);
-                semesterDiv.appendChild(moduleDiv);
+                semesterModuleList.appendChild(moduleDiv); // Füge Modul zur Liste hinzu
             });
-
+             semesterDiv.appendChild(semesterModuleList); // Füge Liste zum Semester-Div hinzu
             semesterContainer.appendChild(semesterDiv);
-    });
+        });
 
-
-    // Gesamt-LP im Titel anzeigen
     const totalLPSpan = document.getElementById('totalSemesterLPs');
     if (totalLPSpan) {
         totalLPSpan.textContent = `(Gesamt: ${totalStudyPlanLPs} LP)`;
@@ -475,42 +473,30 @@ function addArea() {
     const lpInput = document.getElementById('areaCreditPointsInput');
     const parentSelect = document.getElementById('parentAreaSelect');
 
-    // Hide any previous error messages
     const areaInputError = document.getElementById('areaInputError');
     const areaCreditPointsError = document.getElementById('areaCreditPointsError');
     areaInputError.classList.add('hidden');
     areaCreditPointsError.classList.add('hidden');
 
     const newAreaName = areaInput.value.trim();
-    // Erlaube 0 LP für Unterbereiche, standardisiere auf 0, wenn leer oder negativ UND es ein Unterbereich ist
     const parentId = parentSelect.value || null;
     let creditPoints = parseInt(lpInput.value);
 
-    // Wenn es ein Unterbereich ist und die Eingabe ungültig/leer/<0 ist, setze auf 0. Sonst parse normal.
-    if (parentId && (isNaN(creditPoints) || creditPoints < 0)) {
+    // Standardisiere auf 0 wenn leer oder NaN
+    if (isNaN(creditPoints)) {
         creditPoints = 0;
-    } else if (isNaN(creditPoints)) {
-        // Für Hauptbereiche setze auf einen Standardwert oder 0, Validierung prüft später
-        creditPoints = 0; // Wird später von Validierung abgefangen, wenn parentId null ist
     }
-
 
     let isValid = true;
 
-    // Validate area name
     if (!newAreaName) {
-        areaInputError.textContent = 'Bitte geben Sie einen Bereichsnamen ein.'; // Standardnachricht
+        areaInputError.textContent = 'Bitte geben Sie einen Bereichsnamen ein.';
         areaInputError.classList.remove('hidden');
         isValid = false;
     }
 
-    // Validate credit points: Hauptbereiche (>0), Unterbereiche (>=0)
-    if (!parentId && creditPoints <= 0) {
-        areaCreditPointsError.textContent = 'Hauptbereiche müssen eine positive LP-Anzahl (> 0) haben.'; // Angepasste Nachricht
-        areaCreditPointsError.classList.remove('hidden');
-        isValid = false;
-    } else if (parentId && creditPoints < 0) {
-        // Optional: Verhindern negativer LPs auch für Unterbereiche
+    // Validierung: LP dürfen nicht negativ sein
+    if (creditPoints < 0) {
         areaCreditPointsError.textContent = 'Leistungspunkte dürfen nicht negativ sein.';
         areaCreditPointsError.classList.remove('hidden');
         isValid = false;
@@ -522,30 +508,29 @@ function addArea() {
         const areaId = 'area_' + cleanName + '_' + Date.now(); // Eindeutiger machen
 
         const existingArea = areas.find(area =>
-            cleanAreaName(area.name) === cleanAreaName(newAreaName) && area.parentId === parentId // Prüfe auch Parent für Eindeutigkeit auf gleicher Ebene
+            cleanAreaName(area.name) === cleanAreaName(newAreaName) && area.parentId === parentId
         );
 
         if (existingArea) {
              if (confirm(`Ein Bereich mit dem Namen "${existingArea.name}" existiert bereits auf dieser Ebene. Möchten Sie diesen bearbeiten?`)) {
-                editArea(existingArea.id); // Statt editArea besser openAreaEditModal aufrufen
-                // openAreaEditModal(existingArea); // Direkter Aufruf wäre besser
+                openAreaEditModal(existingArea);
                 return;
             } else {
-                 return; // Abbrechen, wenn nicht bearbeitet werden soll
+                 return;
             }
         }
 
         areas.push({
             id: areaId,
-            name: newAreaName, // Originalnamen speichern
-            creditPoints: creditPoints,
+            name: newAreaName,
+            creditPoints: creditPoints, // Speichere den Wert (kann 0 sein)
             parentId: parentId
         });
 
         saveAreaToDatabase(newAreaName, creditPoints);
 
         areaInput.value = '';
-        lpInput.value = '6'; // Reset to default value
+        lpInput.value = '6'; // Reset input field to default
         parentSelect.value = '';
 
         saveToLocalStorage();
@@ -569,25 +554,32 @@ function openAreaEditModal(area) {
     document.getElementById('editAreaLP').value = area.creditPoints;
 
     const parentSelect = document.getElementById('editAreaParent');
-    parentSelect.innerHTML = '<option value="">Kein Übergeordneter Bereich</option>'; // Reset
+    parentSelect.innerHTML = '<option value="">Kein Übergeordneter Bereich</option>';
 
-    // Mögliche Elternteile hinzufügen (ohne sich selbst und eigene Nachfahren)
     const possibleParents = areas.filter(a => {
-        if (a.id === area.id) return false; // Nicht sich selbst
-        // Prüfe auf zirkuläre Abhängigkeit
+        if (a.id === area.id) return false;
         let currentParentId = a.parentId;
         while (currentParentId) {
-            if (currentParentId === area.id) return false; // Ist ein Nachfahre
+            if (currentParentId === area.id) return false;
             const parentArea = areas.find(pa => pa.id === currentParentId);
             currentParentId = parentArea ? parentArea.parentId : null;
         }
-        return true; // Kein Konflikt gefunden
+        return true;
     });
 
+    possibleParents.sort((a,b) => a.name.localeCompare(b.name)); // Sortieren
     possibleParents.forEach(a => {
         const option = document.createElement('option');
         option.value = a.id;
-        option.textContent = a.name; // TODO: Hierarchie andeuten?
+        // Hierarchie andeuten (optional, kann komplex werden)
+        let level = 0;
+        let tempParentId = a.parentId;
+        while(tempParentId) {
+            level++;
+            const tempParent = areas.find(p => p.id === tempParentId);
+            tempParentId = tempParent ? tempParent.parentId : null;
+        }
+        option.textContent = '  '.repeat(level) + a.name;
         option.selected = a.id === area.parentId;
         parentSelect.appendChild(option);
     });
@@ -595,11 +587,11 @@ function openAreaEditModal(area) {
     const modal = document.getElementById('areaEditModal');
     modal.classList.remove('hidden');
 
-    // Stelle sicher, dass der Submit-Handler nur einmal angehängt wird oder überschrieben wird
+    // Submit-Handler
     document.getElementById('editAreaForm').onsubmit = function(e) {
         e.preventDefault();
-        const areaId = document.getElementById('editAreaId').value; // Holen der ID aus dem Formular
-        const currentAreaIndex = areas.findIndex(a => a.id === areaId); // Index erneut finden
+        const areaId = document.getElementById('editAreaId').value;
+        const currentAreaIndex = areas.findIndex(a => a.id === areaId);
          if (currentAreaIndex === -1) {
              console.error("Fehler: Bereich zum Bearbeiten nicht gefunden.");
              closeAreaEditModal();
@@ -607,49 +599,44 @@ function openAreaEditModal(area) {
          }
 
         const newName = document.getElementById('editAreaName').value.trim();
-        const newLP = parseInt(document.getElementById('editAreaLP').value);
+        let newLP = parseInt(document.getElementById('editAreaLP').value);
         const newParentId = document.getElementById('editAreaParent').value || null;
-        const lpErrorField = document.getElementById('editAreaLPError'); // Fehlerfeld holen
-        lpErrorField.classList.add('hidden'); // Fehler erstmal verstecken
+        const lpErrorField = document.getElementById('editAreaLPError');
+        lpErrorField.classList.add('hidden');
+
+        // Standardisiere auf 0 wenn leer oder NaN
+        if (isNaN(newLP)) {
+             newLP = 0;
+        }
 
         let saveIsValid = true;
         if (!newName) {
             alert('Bitte geben Sie einen Namen für den Bereich ein.');
             saveIsValid = false;
         }
-        // Validierung: Hauptbereich (>0 LP), Unterbereich (>=0 LP)
-        else if (!newParentId && (isNaN(newLP) || newLP <= 0)) {
-            lpErrorField.textContent = 'Hauptbereiche müssen > 0 LP haben.';
-            lpErrorField.classList.remove('hidden');
-            // alert('Hauptbereiche (ohne übergeordneten Bereich) müssen eine positive Anzahl an Leistungspunkten (> 0) haben.');
-            saveIsValid = false;
-        } else if (newParentId && (isNaN(newLP) || newLP < 0)) {
-            lpErrorField.textContent = 'LP dürfen nicht negativ sein.';
-            lpErrorField.classList.remove('hidden');
-            // alert('Leistungspunkte für Unterbereiche dürfen nicht negativ sein.');
+        // Validierung: LP dürfen nicht negativ sein
+        else if (newLP < 0) {
+             lpErrorField.textContent = 'LP dürfen nicht negativ sein.';
+             lpErrorField.classList.remove('hidden');
             saveIsValid = false;
         }
 
         if (saveIsValid) {
-            const finalLP = (newParentId && newLP < 0) ? 0 : newLP; // Stelle sicher, dass LP >= 0 ist, falls Validierung geändert wird
-
-            // Update area im Array
             areas[currentAreaIndex] = {
-                ...areas[currentAreaIndex], // Behalte alte Eigenschaften wie ID
+                ...areas[currentAreaIndex],
                 name: newName,
-                creditPoints: finalLP,
+                creditPoints: newLP, // Speichert den Wert (kann 0 sein)
                 parentId: newParentId
             };
 
-            // Update in der "Datenbank" (localStorage für Autocomplete etc.)
-            saveAreaToDatabase(newName, finalLP); // Updated diese Funktion auch
-
+            saveAreaToDatabase(newName, newLP);
             saveToLocalStorage();
             renderAreas();
             closeAreaEditModal();
         }
     };
 }
+
 
 function closeAreaEditModal() {
     const modal = document.getElementById('areaEditModal');

@@ -7,12 +7,17 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <title>Semesterplan Visualisierung</title>
+    <style>
+        .area-block {
+             border-left-width: 4px; /* Stellt sicher, dass der linke Rand immer da ist */
+        }
+    </style>
 </head>
 <body class="bg-neutral-50">
     <div class="container mx-auto p-4">
+        <!-- Header (unverändert) -->
         <div class="flex flex-wrap justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold">Semesterplan Visualisierung</h1>
-
+           <h1 class="text-3xl font-bold">Semesterplan Visualisierung</h1>
             <div class="flex flex-wrap gap-2 mt-2 md:mt-0">
                 <button id="exportButton" onclick="saveToFile()" class="bg-purple-500 hover:bg-purple-600 text-white p-2 rounded">
                     <i class="fas fa-file-export mr-1"></i>Exportieren
@@ -26,7 +31,7 @@
             </div>
         </div>
 
-        <!-- Bereich hinzufügen -->
+        <!-- Bereich hinzufügen Form (Validierungstext angepasst) -->
         <div class="mb-6 bg-white p-4 rounded shadow">
             <h2 class="text-xl font-semibold mb-3">Bereich hinzufügen</h2>
             <form id="addAreaForm" class="space-y-3">
@@ -40,11 +45,11 @@
                         <p id="areaInputError" class="text-red-500 text-xs mt-1 hidden">Bitte geben Sie einen Bereichsnamen ein.</p>
                     </div>
                     <div>
-                        <label for="areaCreditPointsInput" class="block text-sm font-medium text-gray-700">Leistungspunkte (LP)</label> <!-- * entfernt, da für Sub nicht nötig -->
-                        <!-- min="1" entfernt -->
+                        <label for="areaCreditPointsInput" class="block text-sm font-medium text-gray-700">Leistungspunkte (LP)</label>
+                        <!-- min="0" ist der Standard für type=number, min Attribut nicht nötig -->
                         <input id="areaCreditPointsInput" type="number" placeholder="LP" value="6" class="border p-2 w-full rounded">
-                        <!-- Fehlertext angepasst -->
-                        <p id="areaCreditPointsError" class="text-red-500 text-xs mt-1 hidden">Hauptbereiche müssen eine positive LP-Anzahl haben.</p>
+                        <!-- Fehlertext angepasst: Nur negativ ist verboten -->
+                        <p id="areaCreditPointsError" class="text-red-500 text-xs mt-1 hidden">LP dürfen nicht negativ sein.</p>
                     </div>
                     <div>
                         <label for="parentAreaSelect" class="block text-sm font-medium text-gray-700">Übergeordneter Bereich</label>
@@ -59,19 +64,19 @@
             </form>
         </div>
 
-        <!-- Module hinzufügen (unverändert) -->
-        <div class="mb-6 bg-white p-4 rounded shadow">
-            <h2 class="text-xl font-semibold mb-3">Modul hinzufügen</h2>
+        <!-- Module hinzufügen Form (unverändert) -->
+         <div class="mb-6 bg-white p-4 rounded shadow">
+             <h2 class="text-xl font-semibold mb-3">Modul hinzufügen</h2>
             <form id="addModuleForm" class="space-y-3">
+                 <!-- ... unveränderter Formularinhalt ... -->
                  <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
                         <label for="moduleTitleInput" class="block text-sm font-medium text-gray-700">Modultitel *</label>
                         <div class="relative">
                             <input id="moduleTitleInput" type="text" placeholder="Modultitel" class="border p-2 w-full rounded">
-                            <!-- Autocomplete Container -->
                             <div id="moduleAutocompleteResults" class="absolute z-10 bg-white border shadow-lg rounded-md w-full max-h-60 overflow-y-auto hidden"></div>
                             <div class="text-xs text-gray-500 mt-1">
-                                <span id="moduleDbCount">0</span> Module in der Datenbank
+                                <span id="moduleDbCount">0</span> Module in der Datenbank <!-- ID korrigiert -->
                             </div>
                         </div>
                         <p id="moduleTitleError" class="text-red-500 text-xs mt-1 hidden">Bitte geben Sie einen Modultitel ein.</p>
@@ -113,6 +118,7 @@
                             <option value="Bericht">Bericht</option>
                             <option value="Präsentation">Präsentation</option>
                             <option value="Hausarbeit">Hausarbeit</option>
+                            <option value="Protokoll">Protokoll</option>
                         </select>
                     </div>
                 </div>
@@ -139,14 +145,14 @@
                             <option value="SoSe">Sommersemester</option>
                             <option value="WiSe">Wintersemester</option>
                             <option value="Beides" selected>Beides</option>
-                            <option value="">k.A.</option> <!-- Leerer Wert für keine Angabe -->
+                            <option value="">k.A.</option>
                         </select>
                     </div>
                 </div>
 
                  <div>
                     <label for="moduleDescriptionInput" class="block text-sm font-medium text-gray-700">Beschreibung</label>
-                    <textarea id="moduleDescriptionInput" placeholder="Beschreibung (optional)" class="border p-2 w-full rounded" rows="2"></textarea>
+                    <textarea id="moduleDescriptionInput" placeholder="Beschreibung (optional)" class="border p-2 w-full rounded" rows="1"></textarea> <!-- rows="1" -->
                 </div>
 
                 <div>
@@ -156,30 +162,30 @@
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Art</label>
-                    <div class="flex flex-wrap gap-4 mt-1">
+                    <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1"> <!-- Weniger vertikaler Gap -->
                         <label class="inline-flex items-center">
-                            <input type="checkbox" name="moduleType" value="IV" class="form-checkbox h-5 w-5 text-blue-600 rounded">
-                            <span class="ml-2 text-sm">IV</span>
-                        </label>
-                        <label class="inline-flex items-center">
-                            <input type="checkbox" name="moduleType" value="VL" class="form-checkbox h-5 w-5 text-blue-600 rounded">
-                            <span class="ml-2 text-sm">VL</span>
-                        </label>
-                        <label class="inline-flex items-center">
-                            <input type="checkbox" name="moduleType" value="TUT" class="form-checkbox h-5 w-5 text-blue-600 rounded">
-                            <span class="ml-2 text-sm">TUT</span>
-                        </label>
-                        <label class="inline-flex items-center">
-                            <input type="checkbox" name="moduleType" value="UE" class="form-checkbox h-5 w-5 text-blue-600 rounded">
-                            <span class="ml-2 text-sm">UE</span>
-                        </label>
-                        <label class="inline-flex items-center">
-                            <input type="checkbox" name="moduleType" value="PJ" class="form-checkbox h-5 w-5 text-blue-600 rounded">
-                            <span class="ml-2 text-sm">PJ</span>
+                            <input type="checkbox" name="moduleType" value="IV" class="form-checkbox h-4 w-4 text-blue-600 rounded"> <!-- Kleiner -->
+                            <span class="ml-1.5 text-sm">IV</span> <!-- Weniger ml -->
                         </label>
                          <label class="inline-flex items-center">
-                            <input type="checkbox" name="moduleType" value="SE" class="form-checkbox h-5 w-5 text-blue-600 rounded">
-                            <span class="ml-2 text-sm">SE</span>
+                            <input type="checkbox" name="moduleType" value="VL" class="form-checkbox h-4 w-4 text-blue-600 rounded">
+                            <span class="ml-1.5 text-sm">VL</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" name="moduleType" value="TUT" class="form-checkbox h-4 w-4 text-blue-600 rounded">
+                            <span class="ml-1.5 text-sm">TUT</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" name="moduleType" value="UE" class="form-checkbox h-4 w-4 text-blue-600 rounded">
+                            <span class="ml-1.5 text-sm">UE</span>
+                        </label>
+                         <label class="inline-flex items-center">
+                            <input type="checkbox" name="moduleType" value="PJ" class="form-checkbox h-4 w-4 text-blue-600 rounded">
+                            <span class="ml-1.5 text-sm">PJ</span>
+                        </label>
+                         <label class="inline-flex items-center">
+                            <input type="checkbox" name="moduleType" value="SE" class="form-checkbox h-4 w-4 text-blue-600 rounded">
+                            <span class="ml-1.5 text-sm">SE</span>
                         </label>
                     </div>
                 </div>
@@ -190,23 +196,25 @@
             </form>
         </div>
 
+        <!-- Layout Container -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <!-- Bereichsübersicht -->
             <div>
                 <h2 class="text-xl font-semibold mb-2">Bereichsübersicht</h2>
-                <div id="areasContainer" class="space-y-2">
-                    <!-- Bereiche und Module werden hier angezeigt -->
+                <!-- Container mit weniger Außenabstand -->
+                <div id="areasContainer" class="space-y-1.5"> <!-- Weniger Abstand zwischen Bereichen -->
+                    <!-- Bereiche und Module werden hier angezeigt (Styling in JS angepasst) -->
                 </div>
             </div>
 
             <!-- Semesterübersicht -->
             <div>
-                <!-- Überschrift mit Platz für Gesamt-LP -->
                 <h2 class="text-xl font-semibold mb-2">Semesterübersicht
                     <span id="totalSemesterLPs" class="text-base font-normal ml-2 text-gray-600"></span>
                 </h2>
-                <div id="semesterContainer" class="space-y-2">
-                    <!-- Semester wird hier angezeigt -->
+                <!-- Container mit weniger Außenabstand -->
+                <div id="semesterContainer" class="space-y-2"> <!-- Weniger Abstand zwischen Semestern -->
+                    <!-- Semester wird hier angezeigt (Styling in JS angepasst) -->
                 </div>
             </div>
         </div>
@@ -247,7 +255,7 @@
 
         <!-- Area Edit Modal -->
         <div id="areaEditModal" class="fixed inset-0 bg-gray-800 bg-opacity-50 hidden flex items-center justify-center z-50">
-            <div class="bg-white rounded-lg p-6 w-full max-w-2xl">
+             <div class="bg-white rounded-lg p-6 w-full max-w-2xl">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-xl font-semibold">Bereich bearbeiten</h3>
                     <button id="closeAreaModalBtn" class="text-gray-500 hover:text-gray-700">
@@ -263,17 +271,16 @@
                         </div>
                         <div>
                             <label for="editAreaLP" class="block text-sm font-medium text-gray-700">Leistungspunkte</label>
-                            <!-- min="1" entfernt -->
-                            <input type="number" id="editAreaLP" class="border p-2 w-full rounded" required>
-                            <!-- Optional: Add error message specific to modal -->
-                            <p id="editAreaLPError" class="text-red-500 text-xs mt-1 hidden">Hauptbereiche müssen > 0 LP haben.</p>
+                             <!-- min="0" ist Standard -->
+                            <input type="number" id="editAreaLP" min="0" class="border p-2 w-full rounded" required>
+                            <!-- Fehlertext angepasst -->
+                            <p id="editAreaLPError" class="text-red-500 text-xs mt-1 hidden">LP dürfen nicht negativ sein.</p>
                         </div>
                     </div>
                     <div>
                         <label for="editAreaParent" class="block text-sm font-medium text-gray-700">Übergeordneter Bereich</label>
                         <select id="editAreaParent" class="border p-2 w-full rounded">
                             <option value="">Kein Übergeordneter Bereich</option>
-                            <!-- Options populated by JS -->
                         </select>
                     </div>
                     <div class="flex justify-end gap-2">
