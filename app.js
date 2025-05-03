@@ -196,8 +196,22 @@ function handleDbSort(event) {
 // Function to choose a color from the Tailwind colors for each semester
 function generateColor(semester) {
     const tailwindColors = [
-        'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500',
-        'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
+        'bg-blue-500',
+        'bg-green-500',
+        'bg-yellow-500',
+        'bg-purple-500',
+        'bg-pink-500',
+        'bg-indigo-500',
+        'bg-teal-500',
+        'bg-orange-500',
+        'bg-pink-500',
+        'bg-emerald-500',
+        'bg-cyan-500',
+        'bg-violet-500',
+        'bg-amber-500',
+        'bg-sky-500',
+        'bg-teal-500',
+        'bg-fuchsia-500',
         // Ggf. mehr Farben hinzufügen
     ];
      const semesterIndex = parseInt(semester);
@@ -460,7 +474,7 @@ function updateSemesterView() {
              if (totalLP < 25) {
                 lpCounter.classList.add('bg-yellow-200', 'text-yellow-800');
             } else if (totalLP > 33) {
-                lpCounter.classList.add('bg-red-200', 'text-red-800');
+                lpCounter.classList.add('bg-blue-200', 'text-blue-800');
             } else {
                 lpCounter.classList.add('bg-green-200', 'text-green-800');
             }
@@ -469,7 +483,7 @@ function updateSemesterView() {
 
             // Modulliste innerhalb des Semesters
             const semesterModuleList = document.createElement('div');
-            semesterModuleList.className = 'space-y-0.5'; // Kompakter Abstand
+            semesterModuleList.className = 'space-y-0.5 rounded bg-white'; // Kompakter Abstand
 
             modules.forEach((module) => {
                 const moduleDiv = document.createElement('div');
