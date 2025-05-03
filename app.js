@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const clearFiltersBtn = document.getElementById('clearFiltersBtn');
     const saveCurrentFilterBtn = document.getElementById('saveCurrentFilterBtn'); // Button zum Speichern aktiver Filter
     const showHiddenCheckbox = document.getElementById('showHiddenDbModules');
-
+    
     // Lade Startsemester und setze UI
     startSemester = getStartSemester();
     const startTypeSelect = document.getElementById('startSemesterType');
@@ -114,6 +114,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Lade gespeicherte Filter
     savedDbFilters = window.moduleDatabase.loadDbFilters();
     populateSavedFiltersDropdown();
+    
+
+    const exportWordBtn = document.getElementById('exportWordButton');
+    if (exportWordBtn) {
+        exportWordBtn.addEventListener('click', exportStudyPlanAsWord);
+    } else {
+        console.error("Button #exportWordButton nicht gefunden");
+    }
 
     // Event Listener für Filter/Suche/Sortierung
     if (showHiddenCheckbox) showHiddenCheckbox.addEventListener('change', handleShowHiddenToggle);
@@ -206,6 +214,165 @@ function handleDbSort(event) {
     }
 
     updateModuleDatabaseTable(); // Tabelle neu rendern mit neuer Sortierung
+}
+
+/**
+ * Erstellt eine HTML-Struktur des Studienplans und löst den Download als .doc-Datei aus.
+ */
+function exportStudyPlanAsWord() {
+    // 1. Daten sammeln (Bereiche und Module)
+    const planAreas = areas; // Globale Variable
+    const planCourses = courses; // Globale Variable
+
+    // 2. HTML-Struktur aufbauen
+    let htmlContent = `
+        <!DOCTYPE html>
+        <html lang="de">
+        <head>
+            <meta charset="UTF-8">
+            <title>Studienplan Export</title>
+            <style>
+                body { font-family: sans-serif; line-height: 1.4; margin: 20px; }
+                h1, h2, h3 { color: #333; }
+                h1 { border-bottom: 2px solid #ccc; padding-bottom: 5px; }
+                h2 { margin-top: 25px; border-bottom: 1px solid #eee; padding-bottom: 3px;}
+                h3 { margin-top: 15px; color: #555; }
+                .area-block { border-left: 3px solid #eee; padding-left: 15px; margin-bottom: 20px; }
+                .area-block .area-block { border-left-color: #ddd; } /* Verschachtelte Bereiche */
+                .module-list { list-style: none; padding-left: 0; margin-top: 10px; }
+                .module-list li { border-bottom: 1px dotted #eee; padding: 5px 0; margin-bottom: 5px; }
+                .module-list li:last-child { border-bottom: none; }
+                .module-title { font-weight: bold; }
+                .module-details { font-size: 0.9em; color: #666; display: block; margin-top: 3px; }
+                .semester-block { margin-bottom: 20px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
+                .semester-title { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+                .semester-lp { font-size: 0.9em; font-weight: bold; background-color: #f0f0f0; padding: 2px 6px; border-radius: 10px; }
+                /* Einfache Tabellen-Optik für Semester */
+                .semester-module-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                .semester-module-table th, .semester-module-table td { border: 1px solid #ddd; padding: 6px; text-align: left; font-size: 0.9em;}
+                .semester-module-table th { background-color: #f7f7f7; }
+            </style>
+        </head>
+        <body>
+            <h1>Studienplan</h1>
+    `;
+
+    // --- Bereichsübersicht ---
+    htmlContent += `<h2>Bereichsübersicht</h2>`;
+
+    function renderAreaHierarchyForWord(parentId = null, level = 0) {
+        const filteredAreas = planAreas.filter(area => area.parentId === parentId);
+        filteredAreas.sort((a, b) => a.name.localeCompare(b.name));
+
+        filteredAreas.forEach(area => {
+            const usageLP = calculateAreaUsageLP(area.id); // Verwende existierende Funktion
+            const lpText = (area.creditPoints > 0 || !area.parentId) ? ` (${area.creditPoints} LP)` : '';
+            const usageText = (area.creditPoints > 0 || !area.parentId) ? ` (Genutzt: ${usageLP} / ${area.creditPoints} LP)` : ` (Genutzt: ${usageLP} LP)`;
+
+            htmlContent += `<div class="area-block" style="margin-left: ${level * 20}px;">`;
+            htmlContent += `<h${level + 3}>${area.name}${lpText} <span style="font-size:0.8em; color:#777;">${usageText}</span></h${level + 3}>`; // Überschrift Level 3, 4, ...
+
+            // Module dieses Bereichs
+            const areaModules = planCourses.filter(module => module.areaId === area.id);
+            if (areaModules.length > 0) {
+                htmlContent += `<ul class="module-list">`;
+                areaModules.sort((a,b) => a.semester - b.semester || a.title.localeCompare(b.title));
+                areaModules.forEach(module => {
+                    const typeString = module.type && module.type.length > 0 ? module.type.join('/') : '-';
+                    htmlContent += `
+                        <li>
+                            <span class="module-title">${module.title}</span> (${module.creditPoints} LP, Sem: ${module.semester})
+                            <span class="module-details">${typeString} | ${module.examType} | ${module.language} | Turnus: ${module.semester_offered}</span>
+                        </li>
+                    `;
+                });
+                htmlContent += `</ul>`;
+            }
+            // Rekursiv Unterbereiche
+            renderAreaHierarchyForWord(area.id, level + 1);
+            htmlContent += `</div>`; // Schließe area-block
+        });
+    }
+    renderAreaHierarchyForWord(null, 0); // Starte mit Top-Level
+
+    // --- Semesterübersicht ---
+    htmlContent += `<hr style="margin: 30px 0;">`; // Trenner
+    htmlContent += `<h2>Semesterübersicht</h2>`;
+
+    const sortedModules = planCourses.slice().sort((a, b) => a.semester - b.semester || a.title.localeCompare(b.title));
+    const modulesBySemester = sortedModules.reduce((acc, module) => {
+        (acc[module.semester] = acc[module.semester] || []).push(module);
+        return acc;
+    }, {});
+
+    let totalStudyPlanLPs = 0; // Erneut berechnen für die Übersicht
+
+    Object.entries(modulesBySemester)
+        .sort(([semA], [semB]) => parseInt(semA) - parseInt(semB))
+        .forEach(([semester, modules]) => {
+            const totalLP = modules.reduce((sum, module) => sum + module.creditPoints, 0);
+            totalStudyPlanLPs += totalLP;
+
+            htmlContent += `<div class="semester-block">`;
+            htmlContent += `<div class="semester-title"><h3>Semester ${semester}</h3> <span class="semester-lp">${totalLP} LP</span></div>`;
+
+            // Module als Tabelle darstellen
+            if (modules.length > 0) {
+                htmlContent += `<table class="semester-module-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Modul</th>
+                                            <th>LP</th>
+                                            <th>Bereich</th>
+                                            <th>Typ</th>
+                                            <th>Prüfung</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>`;
+                modules.forEach(module => {
+                     const moduleArea = planAreas.find(area => area.id === module.areaId);
+                     const areaName = moduleArea ? moduleArea.name : "-";
+                     const typeString = module.type && module.type.length > 0 ? module.type.join('/') : '-';
+                    htmlContent += `
+                        <tr>
+                            <td>${module.title}</td>
+                            <td>${module.creditPoints}</td>
+                            <td>${areaName}</td>
+                            <td>${typeString}</td>
+                            <td>${module.examType}</td>
+                        </tr>
+                    `;
+                });
+                htmlContent += `</tbody></table>`;
+            } else {
+                htmlContent += `<p>Keine Module in diesem Semester.</p>`;
+            }
+            htmlContent += `</div>`; // Schließe semester-block
+        });
+
+    // Gesamtsumme anzeigen
+    htmlContent += `<p style="margin-top: 20px; font-weight: bold; text-align: right;">Gesamt: ${totalStudyPlanLPs} LP</p>`;
+
+    htmlContent += `
+        </body>
+        </html>
+    `;
+
+    // 3. Download auslösen
+    const blob = new Blob([htmlContent], { type: 'application/msword' }); // Wichtiger MIME-Typ!
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    // Dateinamen generieren (z.B. mit Datum)
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `Studienplan_${dateStr}.doc`; // Endung .doc
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    console.log("Word-Export ausgelöst.");
 }
 
 /**
