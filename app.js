@@ -1774,41 +1774,41 @@ function updateModuleDatabaseCount() {
 
 function updateModuleDatabaseTable() {
     const tableBody = document.getElementById('moduleDatabaseTable');
-    const countElement = document.getElementById('moduleDatabaseCount'); // Für Zähler-Update
+    const countElement = document.getElementById('moduleDatabaseCount');
     const areaFilterSelect = document.getElementById('dbAreaFilterSelect');
     if (!tableBody) return;
 
     const moduleDatabase = window.moduleDatabase.loadModuleDatabase();
+    const planCourses = courses; // Zugriff auf die globalen Plan-Module
 
-    // 1. Filter anwenden
+    // 1. Eindeutige Titel der Module im Plan sammeln (für schnelle Prüfung)
+    // Wir nehmen an, dass Module anhand des Titels als "gleich" betrachtet werden,
+    // auch wenn sie in verschiedenen Semestern/Bereichen im Plan sind.
+    const planCourseTitles = new Set(planCourses.map(course => course.title.toLowerCase()));
+
+    // 2. Filter anwenden (Basis + Erweitert)
     let filteredModules = moduleDatabase.filter(module => {
-        // Basisfilter (Suche, Bereich)
         const searchTermMatch = !dbSearchTerm ||
             (module.title?.toLowerCase().includes(dbSearchTerm)) ||
             (module.areaName?.toLowerCase().includes(dbSearchTerm)) ||
             (module.examType?.toLowerCase().includes(dbSearchTerm)) ||
-            (module.id?.toLowerCase().includes(dbSearchTerm)); // Suche auch nach ID
+            (module.id?.toLowerCase().includes(dbSearchTerm));
         const areaMatch = !dbSelectedArea || (module.areaName === dbSelectedArea);
-
-        // Erweiterter Filter
         const advancedFilterMatch = !dbCurrentAdvancedFilter || checkAdvancedFilter(module, dbCurrentAdvancedFilter);
-
         return searchTermMatch && areaMatch && advancedFilterMatch;
     });
 
-    // Zähler *vor* dem Ausblenden aktualisieren
     if (countElement) {
         countElement.textContent = filteredModules.length;
     }
 
-    // 2. Nach Ausgeblendeten filtern (nur für die Anzeige, nicht für den Zähler)
-    // TODO: Option hinzufügen, um Ausgeblendete anzuzeigen
+    // 3. Nach Ausgeblendeten filtern (wenn Checkbox nicht aktiv)
     let displayModules = filteredModules;
     if (!dbShowHidden) {
         displayModules = filteredModules.filter(module => !module.isHidden);
     }
 
-    // 3. Sortieren
+    // 4. Sortieren
     displayModules.sort((a, b) => {
         // Primäre Sortierung: isHidden (Nicht-Versteckte zuerst)
         if (a.isHidden !== b.isHidden) {
@@ -1855,18 +1855,21 @@ function updateModuleDatabaseTable() {
         return dbSortDirection === 'asc' ? comparison : comparison * -1;
     });
 
-    // 4. Tabelle rendern
-    tableBody.innerHTML = '';
-
     if (displayModules.length === 0) {
         const colSpan = tableBody.closest('table').querySelector('thead th').parentElement.childElementCount;
         tableBody.innerHTML = `<tr><td class="border p-2 italic text-gray-500" colspan="${colSpan}">Keine Module entsprechen den aktuellen Filtern${dbShowHidden ? ' (inkl. ausgeblendeter)' : ''}.</td></tr>`;
     } else {
         displayModules.forEach(module => {
             const row = document.createElement('tr');
-            // Visuelles Feedback anwenden
-            if (module.isHidden) row.classList.add('opacity-50', 'italic', 'bg-gray-100'); // Deutlicheres Feedback für ausgeblendete
-            if (module.isFavorite && !module.isHidden) row.classList.add('bg-yellow-50'); // Favorit nur, wenn nicht ausgeblendet (optional)
+
+            // NEU: Prüfen, ob Modul (anhand Titel) im Plan ist
+            const isInPlan = planCourseTitles.has(module.title.toLowerCase());
+
+            // Visuelles Feedback
+            if (module.isHidden) row.classList.add('opacity-50', 'italic', 'bg-gray-100');
+            else if (isInPlan) row.classList.add('bg-green-50'); // Grünlicher Hintergrund, wenn im Plan und nicht versteckt
+            else if (module.isFavorite) row.classList.add('bg-yellow-50'); // Favorit nur, wenn nicht im Plan & nicht versteckt
+
             if (module.isFavorite) row.classList.add('font-semibold'); // Immer fett für Favoriten
 
 
@@ -1875,36 +1878,54 @@ function updateModuleDatabaseTable() {
                  ? lastUpdatedDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
                  : '-';
 
+            // Button Zustand/Text für "Zum Plan hinzufügen" anpassen
+            let addToPlanButtonHtml;
+            if (isInPlan) {
+                addToPlanButtonHtml = `
+                    <button class="text-green-600 cursor-default" disabled title="Bereits im Plan">
+                        <i class="fas fa-check-circle"></i>
+                    </button>`;
+            } else if (module.isHidden) {
+                addToPlanButtonHtml = `
+                    <button class="text-gray-400 cursor-not-allowed" disabled title="Modul ist ausgeblendet">
+                        <i class="fas fa-plus"></i>
+                    </button>`;
+            } else {
+                 addToPlanButtonHtml = `
+                    <button class="add-to-plan-btn text-green-500 hover:text-green-700"
+                            data-id="${module.id}" title="Zum Plan hinzufügen">
+                        <i class="fas fa-plus"></i>
+                    </button>`;
+            }
+
+
             row.innerHTML = `
-                <td class="border p-1.5 text-center">
+                <td class="border p-1.5 text-center"> <!-- Fav -->
                     <button class="favorite-db-module-btn hover:text-yellow-500 ${module.isFavorite ? 'text-yellow-400' : 'text-gray-300'}" data-id="${module.id}" title="Favorisieren">
                         <i class="fas fa-star"></i>
                     </button>
                 </td>
-                <td class="border p-1.5">
+                <td class="border p-1.5"> <!-- Titel -->
                     ${module.baseLink ?
                         `<a href="${module.baseLink}" target="_blank" class="text-blue-600 hover:underline">${module.title}</a>` :
                         module.title}
-                    ${module.version ? `<span class="text-xs text-gray-400 ml-1">(v${module.version})</span>`: ''} <!-- Version beim Titel -->
+                    ${module.version ? `<span class="text-xs text-gray-400 ml-1">(v${module.version})</span>`: ''}
                 </td>
-                <td class="border p-1.5">${module.areaName || '-'}</td>
-                <td class="border p-1.5 text-center">${module.creditPoints}</td>
-                <td class="border p-1.5">${module.examType || '-'}</td>
-                <td class="border p-1.5">${module.semester_offered || '-'}</td>
-                <td class="border p-1.5">${module.version || '-'}</td> <!-- Version Spalte bleibt optional -->
-                <td class="border p-1.5 text-xs text-gray-500 whitespace-nowrap">${formattedDate}</td>
-                <td class="border p-1.5">
+                <td class="border p-1.5">${module.areaName || '-'}</td> <!-- Bereich -->
+                <td class="border p-1.5 text-center">${module.creditPoints}</td> <!-- LP -->
+                <td class="border p-1.5">${module.examType || '-'}</td> <!-- Prüfung -->
+                <td class="border p-1.5">${module.semester_offered || '-'}</td> <!-- Turnus -->
+                <td class="border p-1.5">${module.version || '-'}</td> <!-- Version -->
+                <td class="border p-1.5 text-xs text-gray-500 whitespace-nowrap">${formattedDate}</td> <!-- Aktualisiert -->
+                <td class="border p-1.5"> <!-- Aktionen -->
                     <div class="flex gap-2 items-center justify-center">
-                        <button class="add-to-plan-btn text-green-500 hover:text-green-700"
-                                data-id="${module.id}" title="Zum Plan hinzufügen" ${module.isHidden ? 'disabled style="opacity:0.3; cursor:not-allowed;"' : ''}> <!-- Button deaktivieren wenn hidden -->
-                            <i class="fas fa-plus"></i>
-                        </button>
+                        ${addToPlanButtonHtml} <!-- Geänderter Add-Button -->
                         <button class="edit-db-module-btn text-blue-500 hover:text-blue-700"
                                 data-id="${module.id}" data-type="database" title="Bearbeiten">
                             <i class="fas fa-edit"></i>
                         </button>
                         <button class="hide-db-module-btn ${module.isHidden ? 'text-green-500 hover:text-green-700' : 'text-gray-500 hover:text-gray-700'}" data-id="${module.id}" title="${module.isHidden ? 'Einblenden' : 'Ausblenden'}">
-                            <i class="fas ${module.isHidden ? 'fa-eye' : 'fa-eye-slash'}"></i> <!-- Icon umgekehrt -->
+                            <i class="fas ${module.isHidden ? 'fa-eye' : 'fa-eye-slash'}"></i>
                         </button>
                         <button class="remove-db-module-btn text-red-500 hover:text-red-700"
                                 data-id="${module.id}" data-type="database" title="Löschen">
@@ -1917,14 +1938,14 @@ function updateModuleDatabaseTable() {
         });
     }
 
-    // 5. Sortierindikatoren aktualisieren
+    // 6. Sortierindikatoren aktualisieren
     updateSortIndicators();
 
-    // 6. Bereichsfilter-Dropdown aktualisieren (nur wenn nötig)
+    // 7. Bereichsfilter-Dropdown aktualisieren (nur wenn nötig)
     // Mache dies seltener, z.B. nur beim Laden oder wenn Module hinzugefügt/entfernt wurden.
     populateDbAreaFilter(moduleDatabase); // Übergib die *gesamte* DB für die Filteroptionen
 
-    // 7. Event Delegation sicherstellen (sollte durch DOMContentLoaded abgedeckt sein, aber zur Sicherheit)
+    // 8. Event Delegation sicherstellen (sollte durch DOMContentLoaded abgedeckt sein, aber zur Sicherheit)
     if (!tableBody.hasAttribute('data-listeners-added')) {
         tableBody.setAttribute('data-listeners-added', 'true');
         tableBody.addEventListener('click', handleModuleDatabaseTableClick); // Stelle sicher, dass dieser Handler auch fav/hide behandelt
@@ -2127,119 +2148,206 @@ function closeFilterBuilder() {
     if (modal) modal.classList.add('hidden');
 }
 
+/**
+ * Fügt eine neue Zeile zum Filter Builder hinzu oder füllt sie basierend auf einer Regel.
+ * @param {object|null} rule - Ein optionales Regelobjekt zum Vorfüllen der Zeile.
+ */
 function addFilterConditionRow(rule = null) {
-     document.getElementById('noFiltersText')?.remove(); // "Keine Filter"-Text entfernen
-     const container = document.getElementById('filterConditionsContainer');
-     const conditionDiv = document.createElement('div');
-     conditionDiv.className = 'filter-condition-row flex items-center gap-2 p-2 border rounded bg-white';
+    const container = document.getElementById('filterConditionsContainer');
+    if (!container) {
+        console.error("Filter-Container nicht gefunden!");
+        return;
+    }
 
-     // Feld Auswahl
-     const fieldSelect = document.createElement('select');
-     fieldSelect.className = 'filter-field border p-1 rounded text-sm flex-grow';
-     for (const [key, config] of Object.entries(filterFields)) {
-         const option = document.createElement('option');
-         option.value = key;
-         option.textContent = config.label;
-         if (rule && rule.field === key) option.selected = true;
-         fieldSelect.appendChild(option);
-     }
+    // Entferne den "Keine Bedingungen"-Text, falls vorhanden
+    document.getElementById('noFiltersText')?.remove();
 
-     // Operator Auswahl (wird bei Feldänderung aktualisiert)
-     const operatorSelect = document.createElement('select');
-     operatorSelect.className = 'filter-operator border p-1 rounded text-sm w-32'; // Feste Breite für Operator
+    // Erstelle die Haupt-Div für die Zeile
+    const conditionDiv = document.createElement('div');
+    conditionDiv.className = 'filter-condition-row flex items-center gap-2 p-2 border rounded bg-white';
 
-      // Wert Eingabe (wird bei Feldänderung aktualisiert)
-      const valueInputContainer = document.createElement('div'); // Container für das Eingabefeld
-      valueInputContainer.className = 'filter-value-container flex-grow';
+    // --- 1. Feld-Auswahl (Select) ---
+    const fieldSelect = document.createElement('select');
+    fieldSelect.className = 'filter-field border p-1 rounded text-sm flex-grow';
+
+    // Bestimme das initial auszuwählende Feld
+    let initialSelectedFieldKey = Object.keys(filterFields)[0]; // Fallback: erstes Feld
+    if (rule && filterFields[rule.field]) { // Prüfe, ob das Feld aus der Regel gültig ist
+        initialSelectedFieldKey = rule.field;
+    } else if (rule && !filterFields[rule.field]) {
+         console.warn(`Ungültiges Feld "${rule.field}" in geladener Regel. Verwende Default.`);
+    }
+
+    // Befülle das Feld-Select
+    for (const [key, config] of Object.entries(filterFields)) {
+        const option = document.createElement('option');
+        option.value = key;
+        option.textContent = config.label;
+        if (key === initialSelectedFieldKey) {
+            option.selected = true; // Wähle das bestimmte Feld vor
+        }
+        fieldSelect.appendChild(option);
+    }
+
+    // --- 2. Operator-Auswahl (Select) ---
+    const operatorSelect = document.createElement('select');
+    operatorSelect.className = 'filter-operator border p-1 rounded text-sm w-32'; // Feste Breite kann helfen
+
+    // --- 3. Wert-Eingabe (Container) ---
+    const valueInputContainer = document.createElement('div');
+    valueInputContainer.className = 'filter-value-container flex-grow'; // Nimmt verfügbaren Platz
+
+    // --- 4. Löschen-Button ---
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.innerHTML = '<i class="fas fa-times text-red-500 hover:text-red-700"></i>';
+    deleteBtn.className = 'px-1 py-1 flex-shrink-0'; // Verhindert Schrumpfen
+    deleteBtn.title = "Bedingung entfernen";
+    deleteBtn.onclick = () => {
+        conditionDiv.remove();
+        // Prüfen, ob es die letzte Bedingung war
+        if (container.querySelectorAll('.filter-condition-row').length === 0) {
+            container.innerHTML = '<p id="noFiltersText" class="text-sm text-gray-500">Noch keine Bedingungen hinzugefügt.</p>';
+        }
+    };
+
+    // --- Hilfsfunktion: Aktualisiert Operator und Wert basierend auf dem Feld ---
+    const updateOperatorAndValue = (selectedFieldKey) => {
+        console.log(`Aktualisiere Operator/Wert für Feld: ${selectedFieldKey}`); // Debugging
+
+        const fieldConfig = filterFields[selectedFieldKey];
+
+        // **Robuste Prüfung auf fieldConfig**
+        if (!fieldConfig || !fieldConfig.type) {
+            console.error(`Konfiguration oder Typ für Feld "${selectedFieldKey}" fehlt oder ist ungültig!`, fieldConfig);
+            operatorSelect.innerHTML = '<option value="">Fehler</option>';
+            valueInputContainer.innerHTML = '';
+            return;
+        }
+
+        // Passende Operatoren holen (Fallback auf Text)
+        const availableOperators = filterOperators[fieldConfig.type] || filterOperators.text;
+        if (!availableOperators || availableOperators.length === 0) {
+             console.error(`Keine Operatoren für Typ "${fieldConfig.type}" gefunden!`);
+             operatorSelect.innerHTML = '<option value="">Fehler</option>';
+             valueInputContainer.innerHTML = '';
+             return;
+        }
+
+        // Operator-Select leeren und neu befüllen
+        operatorSelect.innerHTML = '';
+        let isInitialCall = operatorSelect.options.length === 0; // Prüfen, ob es der erste Aufruf für diese Zeile ist
+        let selectedOperatorValue = null;
+
+        // Bestimme den Operator, der ausgewählt werden soll
+        // 1. Wenn eine Regel geladen wird UND das Feld passt UND der Operator gültig ist
+         if (rule && rule.field === selectedFieldKey && availableOperators.some(op => op.value === rule.operator)) {
+            selectedOperatorValue = rule.operator;
+        }
+        // 2. Sonst nimm den ersten verfügbaren Operator
+        else {
+            selectedOperatorValue = availableOperators[0].value;
+        }
 
 
-      // Hilfsfunktion zum Aktualisieren von Operator und Wert basierend auf dem Feld
-      const updateOperatorAndValue = (selectedFieldKey) => {
-         const fieldConfig = filterFields[selectedFieldKey];
-         operatorSelect.innerHTML = ''; // Operator leeren
+        availableOperators.forEach(op => {
+            const option = document.createElement('option');
+            option.value = op.value;
+            option.textContent = op.label;
+            if (op.value === selectedOperatorValue) {
+                option.selected = true;
+            }
+            operatorSelect.appendChild(option);
+        });
 
-          let currentOperators = filterOperators[fieldConfig.type] || filterOperators.text; // Fallback auf Text
 
-          currentOperators.forEach(op => {
-              const option = document.createElement('option');
-              option.value = op.value;
-              option.textContent = op.label;
-              // Wähle Operator vor, wenn Regel geladen wird
-              if (rule && rule.field === selectedFieldKey && rule.operator === op.value) {
-                  option.selected = true;
-              }
-              operatorSelect.appendChild(option);
-          });
+        // Wertfeld leeren und neu erstellen
+        valueInputContainer.innerHTML = '';
+        let inputElement = null; // Wichtig: zurücksetzen
 
-          // Wertfeld anpassen
-          valueInputContainer.innerHTML = ''; // Altes Feld entfernen
-          let inputElement;
+        // Bestimme, ob der aktuell ausgewählte Operator ein Wertfeld benötigt
+        const operatorNeedsValue = !['is_empty', 'is_not_empty', 'is_true', 'is_false'].includes(selectedOperatorValue);
 
-           // Bestimme, ob das Wertfeld benötigt wird
-           const needsValueInput = !['is_empty', 'is_not_empty', 'is_true', 'is_false'].includes(operatorSelect.value);
 
-          if (fieldConfig.type === 'number') {
-              inputElement = document.createElement('input');
-              inputElement.type = 'number';
-              inputElement.step = 'any'; // Erlaube Dezimalzahlen für LP falls nötig
-          } else if (fieldConfig.type === 'date') {
-              inputElement = document.createElement('input');
-              inputElement.type = 'date';
-          } else if (fieldConfig.type === 'select') {
-                inputElement = document.createElement('select');
-                (fieldConfig.options || []).forEach(optValue => {
-                    const opt = document.createElement('option');
-                    opt.value = optValue;
-                    opt.textContent = optValue === '' ? 'k.A.' : optValue; // Anzeige für leeren Wert
-                    if(rule && rule.field === selectedFieldKey && String(rule.value) === String(optValue)) opt.selected = true;
-                    inputElement.appendChild(opt);
-                });
-           } else if (fieldConfig.type === 'boolean') {
-                // Für boolean wird kein Wertfeld benötigt, der Operator reicht
-                 inputElement = null; // Kein Input
-           } else { // Default: text
-              inputElement = document.createElement('input');
-              inputElement.type = 'text';
-          }
+        // Erstelle das passende Eingabeelement basierend auf dem Feldtyp
+         switch (fieldConfig.type) {
+            case 'number':
+                inputElement = document.createElement('input');
+                inputElement.type = 'number';
+                inputElement.step = 'any';
+                break;
+            case 'date':
+                inputElement = document.createElement('input');
+                inputElement.type = 'date';
+                break;
+            case 'select':
+                if (fieldConfig.options && Array.isArray(fieldConfig.options)) {
+                    inputElement = document.createElement('select');
+                    fieldConfig.options.forEach(optValue => {
+                        const opt = document.createElement('option');
+                        opt.value = optValue;
+                        opt.textContent = optValue === '' ? 'k.A.' : optValue; // Zeige 'k.A.' für leere Option
+                        inputElement.appendChild(opt);
+                    });
+                } else {
+                    console.warn(`Feld "${selectedFieldKey}" ist Typ 'select', aber 'options' fehlen oder sind kein Array. Fallback auf Text.`);
+                    inputElement = document.createElement('input'); // Fallback
+                    inputElement.type = 'text';
+                }
+                break;
+            case 'boolean':
+                // Kein Eingabefeld für Boolean nötig, der Operator reicht
+                break;
+            default: // 'text' und unbekannte Typen
+                inputElement = document.createElement('input');
+                inputElement.type = 'text';
+                break;
+        }
 
-          if (inputElement) {
-             inputElement.className = 'filter-value border p-1 rounded text-sm w-full';
-              if (rule && rule.field === selectedFieldKey) {
-                  inputElement.value = rule.value ?? '';
-              }
-              valueInputContainer.appendChild(inputElement);
-              inputElement.style.display = needsValueInput ? '' : 'none'; // Wertfeld ein/ausblenden
-          }
 
-          // Blende Wertfeld aus, wenn Operator es nicht braucht
-           operatorSelect.onchange = () => {
-                 const operatorNeedsValue = !['is_empty', 'is_not_empty', 'is_true', 'is_false'].includes(operatorSelect.value);
-                 if(inputElement) {
-                     inputElement.style.display = operatorNeedsValue ? '' : 'none';
-                 }
-           };
-      };
+        // Wenn ein Eingabeelement erstellt wurde
+        if (inputElement) {
+            inputElement.className = 'filter-value border p-1 rounded text-sm w-full';
+            // Setze den Wert nur, wenn eine Regel geladen wird und das Feld übereinstimmt
+            if (rule && rule.field === selectedFieldKey) {
+                 inputElement.value = rule.value ?? ''; // Setze Wert aus Regel
+            }
+            valueInputContainer.appendChild(inputElement);
+            // Sichtbarkeit basierend auf dem Operator setzen
+            inputElement.style.display = operatorNeedsValue ? '' : 'none';
+        }
 
-     // Event Listener für Feldänderung
-     fieldSelect.addEventListener('change', (e) => updateOperatorAndValue(e.target.value));
+        // Listener für Operator-Änderung hinzufügen (wird ggf. überschrieben, das ist ok)
+        operatorSelect.onchange = () => {
+            const currentOperatorNeedsValue = !['is_empty', 'is_not_empty', 'is_true', 'is_false'].includes(operatorSelect.value);
+            const currentInputElement = valueInputContainer.querySelector('.filter-value'); // Finde das aktuelle Input-Element
+            if (currentInputElement) {
+                currentInputElement.style.display = currentOperatorNeedsValue ? '' : 'none';
+                if (!currentOperatorNeedsValue) currentInputElement.value = '';
+            }
+        };
+    }; // Ende von updateOperatorAndValue
 
-     // Löschen Button
-     const deleteBtn = document.createElement('button');
-     deleteBtn.type = 'button';
-     deleteBtn.innerHTML = '<i class="fas fa-times text-red-500"></i>';
-     deleteBtn.className = 'px-1';
-     deleteBtn.onclick = () => conditionDiv.remove();
+    // --- Event Listener für Feld-Änderung ---
+    // Ruft die Hilfsfunktion auf, wenn der Benutzer das Feld wechselt
+    fieldSelect.addEventListener('change', (e) => updateOperatorAndValue(e.target.value));
 
-     // Elemente hinzufügen
-     conditionDiv.appendChild(fieldSelect);
-     conditionDiv.appendChild(operatorSelect);
-     conditionDiv.appendChild(valueInputContainer);
-     conditionDiv.appendChild(deleteBtn);
-     container.appendChild(conditionDiv);
+    // --- Elemente zur Zeile hinzufügen ---
+    conditionDiv.appendChild(fieldSelect);
+    conditionDiv.appendChild(operatorSelect);
+    conditionDiv.appendChild(valueInputContainer);
+    conditionDiv.appendChild(deleteBtn);
 
-     // Initial Operator und Wert setzen (beim Laden einer Regel oder neu)
-     updateOperatorAndValue(rule ? rule.field : fieldSelect.value);
-}
+    // --- Zeile zum Container hinzufügen ---
+    container.appendChild(conditionDiv);
+
+    // --- Initialen Zustand für Operator und Wert setzen ---
+    // Rufe die Update-Funktion mit dem initial ausgewählten Feld auf,
+    // nachdem alle Elemente im DOM sind.
+    console.log(`Initialer Aufruf von updateOperatorAndValue für Feld: ${initialSelectedFieldKey}`); // Debugging
+    updateOperatorAndValue(initialSelectedFieldKey);
+
+} // Ende von addFilterConditionRow
 
 function collectFilterFromBuilder() {
      const conditions = [];
