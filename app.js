@@ -727,7 +727,7 @@ function renderAreas() {
 
             // Modul-Liste (kompakter)
             const moduleList = document.createElement('div');
-            moduleList.className = 'mt-1.5 space-y-0.5 px-1'; // mt-1.5, space-y-0.5
+            moduleList.className = 'mt-1.5 space-y-0.5'; // mt-1.5, space-y-0.5
 
             const areaModules = courses.filter(module => module.areaId === area.id);
             areaModules.sort((a,b) => a.semester - b.semester || a.title.localeCompare(b.title));
