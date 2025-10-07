@@ -521,8 +521,16 @@ function getStartSemester() {
             console.error("Fehler beim Parsen des Startsemesters:", e);
         }
     }
-    // Default zurückgeben, wenn nichts gespeichert oder ungültig
-    return { type: 'WiSe', year: new Date().getFullYear() -1 }; // Default: letztes WiSe
+    // Default zurückgeben: aktuelles Jahr
+    const currentYear = new Date().getFullYear();
+    const defaultSemester = { type: 'WiSe', year: currentYear };
+    // Speichere den Default auch direkt im localStorage
+    try {
+        localStorage.setItem('studyStartSemester', JSON.stringify(defaultSemester));
+    } catch (e) {
+        console.error("Fehler beim Speichern des Default-Startsemesters:", e);
+    }
+    return defaultSemester;
 }
 
 /**
@@ -543,6 +551,9 @@ function saveStartSemester() {
     startSemester = { type: type, year: year };
     try {
         localStorage.setItem('studyStartSemester', JSON.stringify(startSemester));
+        // Auch in den Hauptdaten speichern
+        saveToLocalStorage();
+        
         // Optional: Visuelles Feedback geben
         const btn = document.getElementById('saveStartSemesterBtn');
         if(btn) {
@@ -557,7 +568,8 @@ function saveStartSemester() {
             }, 1500);
         }
          console.log("Startsemester gespeichert:", startSemester);
-         // Optional: Semestervorschläge in offenen Modals aktualisieren, falls nötig
+         // Ansicht aktualisieren (z.B. Semesterübersicht)
+         renderAreas();
     } catch (e) {
         console.error("Fehler beim Speichern des Startsemesters:", e);
         alert("Startsemester konnte nicht gespeichert werden.");
@@ -1564,6 +1576,9 @@ function saveToLocalStorage() {
             localStorage.setItem('departments', JSON.stringify(departments));
         }
         
+        // Speichere auch das startSemester
+        localStorage.setItem('studyStartSemester', JSON.stringify(startSemester));
+        
         return true;
     } catch (error) {
         console.error('Error saving to localStorage:', error);
@@ -1609,6 +1624,9 @@ function loadFromLocalStorage() {
         if (storedDepartments) {
             departments = JSON.parse(storedDepartments);
         }
+        
+        // Lade auch das startSemester
+        startSemester = getStartSemester();
         
         return true;
     } catch (error) {
@@ -1784,7 +1802,7 @@ function loadModuleDatabase() {
 
 // Save to file
 async function saveToFile() {
-    window.importExport.exportStudyPlan(areas, courses);
+    window.importExport.exportStudyPlan(areas, courses, startSemester);
 }
 
 // Import study plan from file
@@ -1807,13 +1825,31 @@ async function importStudyPlan() {
                 };
             });
             
+            // Importiere startSemester, falls vorhanden
+            let semesterInfoMessage = '';
+            if (data.startSemester && data.startSemester.type && data.startSemester.year) {
+                startSemester = data.startSemester;
+                semesterInfoMessage = `\nStartsemester: ${startSemester.type} ${startSemester.year}`;
+            } else {
+                // Setze auf aktuelles Jahr, wenn nicht vorhanden
+                const currentYear = new Date().getFullYear();
+                startSemester = { type: 'WiSe', year: currentYear };
+                semesterInfoMessage = `\n\nHinweis: Die importierte Datei enthielt keine Startsemester-Information. Das Startsemester wurde auf ${startSemester.type} ${startSemester.year} gesetzt.`;
+            }
+            
+            // Aktualisiere UI-Felder
+            const startTypeSelect = document.getElementById('startSemesterType');
+            const startYearInput = document.getElementById('startYearInput');
+            if (startTypeSelect) startTypeSelect.value = startSemester.type;
+            if (startYearInput) startYearInput.value = startSemester.year;
+            
             // Save to localStorage
             saveToLocalStorage();
             
             // Re-render everything
             renderAreas();
             
-            alert('Studienplan erfolgreich importiert!');
+            alert('Studienplan erfolgreich importiert!' + semesterInfoMessage);
         }
     } catch (error) {
         console.error('Error importing study plan:', error);
@@ -3056,7 +3092,8 @@ function closeDbModuleAddModal() {
 async function saveToFile() {
     const data = {
         areas: areas,
-        modules: courses
+        modules: courses,
+        startSemester: startSemester
     };
 
     const jsonString = JSON.stringify(data, null, 2);

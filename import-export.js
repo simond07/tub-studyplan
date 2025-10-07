@@ -4,10 +4,11 @@
  */
 
 // Export study plan to file
-async function exportStudyPlan(areas, courses) {
+async function exportStudyPlan(areas, courses, startSemester) {
     const data = {
         areas: areas,
         modules: courses,
+        startSemester: startSemester,
         exportDate: new Date().toISOString(),
         version: '1.0'
     };
