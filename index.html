@@ -44,7 +44,7 @@
             </div>
               <!-- Export/Import/Scraper Buttons -->
             <div class="flex flex-wrap gap-2 mt-2 md:mt-0">
-                <button id="exportButton" onclick="saveToFile()" class="bg-purple-500 hover:bg-purple-600 text-white p-2 rounded">
+                <button id="exportButton" onclick="window.importExport.exportStudyPlan(areas, courses, startSemester)" class="bg-purple-500 hover:bg-purple-600 text-white p-2 rounded">
                     <i class="fas fa-file-export mr-1"></i>Plan (JSON)
                 </button>
                 <!-- NEU: Word Export Buttons -->

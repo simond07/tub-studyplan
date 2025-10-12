@@ -147,13 +147,6 @@ document.addEventListener('DOMContentLoaded', function() {
     populateSavedFiltersDropdown();
     
 
-    // Listener für JSON Export (existierend)
-    const exportButton = document.getElementById('exportButton');
-    if (exportButton) {
-        exportButton.addEventListener('click', () => window.importExport.exportStudyPlan(areas, courses, startSemester));
-    }
-
-
     // NEU: Listener für Word Exporte
     const exportWordAreaBtn = document.getElementById('exportWordAreaButton');
     if (exportWordAreaBtn) {
@@ -3233,42 +3226,45 @@ function closeDbModuleAddModal() {
     }
 }
 
+// DEPRECATED: Diese Funktionen sind veraltet und sollten nicht mehr verwendet werden!
+// Verwenden Sie stattdessen window.importExport.exportStudyPlan() aus import-export.js
+// Diese Funktion fügt KEINE version oder exportDate hinzu!
 // Save to file
-async function saveToFile() {
-    const data = {
-        areas: areas,
-        modules: courses,
-        startSemester: startSemester
-    };
+// async function saveToFile() {
+//     const data = {
+//         areas: areas,
+//         modules: courses,
+//         startSemester: startSemester
+//     };
 
-    const jsonString = JSON.stringify(data, null, 2);
+//     const jsonString = JSON.stringify(data, null, 2);
 
-    // Check if the File System Access API is supported
-    if ('showSaveFilePicker' in window) {
-        const options = {
-            types: [{
-                description: 'JSON Files',
-                accept: {
-                    'application/json': ['.json']
-                }
-            }]
-        };
+//     // Check if the File System Access API is supported
+//     if ('showSaveFilePicker' in window) {
+//         const options = {
+//             types: [{
+//                 description: 'JSON Files',
+//                 accept: {
+//                     'application/json': ['.json']
+//                 }
+//             }]
+//         };
 
-        try {
-            const handle = await window.showSaveFilePicker(options);
-            const writable = await handle.createWritable();
-            await writable.write(jsonString);
-            await writable.close();
-            console.log('Data saved to file successfully.');
-        } catch (error) {
-            console.error('Error saving to file:', error);
-            fallbackSave(jsonString);
-        }
-    } else {
-        // Fallback for browsers that don't support the File System Access API
-        fallbackSave(jsonString);
-    }
-}
+//         try {
+//             const handle = await window.showSaveFilePicker(options);
+//             const writable = await handle.createWritable();
+//             await writable.write(jsonString);
+//             await writable.close();
+//             console.log('Data saved to file successfully.');
+//         } catch (error) {
+//             console.error('Error saving to file:', error);
+//             fallbackSave(jsonString);
+//         }
+//     } else {
+//         // Fallback for browsers that don't support the File System Access API
+//         fallbackSave(jsonString);
+//     }
+// }
 
 // Fallback save method using Blob and download attribute
 function fallbackSave(jsonString) {
