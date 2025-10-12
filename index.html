@@ -7,6 +7,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/ico" href="/favicon.ico">
     <link rel="alternate icon" href="/favicon.svg">
     <title>Semesterplan Visualisierung</title>
     <style>
@@ -59,12 +60,6 @@
                 <a href="module-scraper.html" class="bg-teal-500 hover:bg-teal-600 text-white p-2 rounded inline-block">
                     <i class="fas fa-download mr-1"></i>Module holen
                 </a>
-                <button id="exportDatabaseButton" class="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1 rounded text-sm">
-                    <i class="fas fa-database mr-1"></i>DB Export
-                </button>
-                <button id="importDatabaseButton" class="bg-orange-700 hover:bg-orange-800 text-white px-2 py-1 rounded text-sm">
-                    <i class="fas fa-upload mr-1"></i>DB Import
-                </button>
             </div>
          </div>
 
@@ -228,6 +223,17 @@
                 </div>
 
                 <div>
+                    <label class="inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="moduleProvisionalCheckbox" class="form-checkbox h-4 w-4 text-orange-600 rounded">
+                        <span class="ml-2 text-sm font-medium text-gray-700">Unter Vorbehalt hinzufügen</span>
+                        <span class="ml-1 text-gray-400 cursor-help" title="Module unter Vorbehalt werden nicht in die LP-Summen einberechnet und erscheinen ausgegraut in der Übersicht">
+                            <i data-lucide="info" class="inline-block size-4"></i>
+                        </span>
+                    </label>
+                    <p class="text-xs text-gray-500 mt-1 ml-6">Module unter Vorbehalt werden nicht in die LP-Summen einberechnet</p>
+                </div>
+
+                <div>
                     <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded">Modul hinzufügen</button>
                 </div>
             </form>
@@ -319,9 +325,6 @@
                      <thead class="sticky top-0 bg-gray-100 z-10">
                         <tr>
                             <!-- Header klickbar machen mit data-sort-by -->
-                             <th class="border p-2 text-left cursor-pointer hover:bg-gray-200" data-sort-by="isFavorite">
-                                <i class="fas fa-star text-xs"></i> <!-- Stern für Favorit-Sortierung -->
-                             </th>
                             <th class="border p-2 text-left cursor-pointer hover:bg-gray-200" data-sort-by="title">
                                 Titel <span class="sort-indicator"></span>
                             </th>
@@ -551,6 +554,31 @@
                             </label>
                          </div>
                      </div>
+                     
+                     <!-- Unter Vorbehalt Checkbox (nur für Plan-Module) -->
+                     <div id="editModuleProvisionalContainer">
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="editModuleProvisionalCheckbox" class="form-checkbox h-4 w-4 text-orange-600 rounded">
+                            <span class="ml-2 text-sm font-medium text-gray-700">Unter Vorbehalt</span>
+                            <span class="ml-1 text-gray-400 cursor-help" title="Module unter Vorbehalt werden nicht in die LP-Summen einberechnet und erscheinen ausgegraut in der Übersicht">
+                                <i data-lucide="info" class="inline-block size-4"></i>
+                            </span>
+                        </label>
+                        <p class="text-xs text-gray-500 mt-1 ml-6">Module unter Vorbehalt werden nicht in die LP-Summen einberechnet</p>
+                     </div>
+                     
+                     <!-- Ausblenden Checkbox (nur für DB-Module) -->
+                     <div id="editModuleHiddenContainer" class="hidden">
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="editModuleHiddenCheckbox" class="form-checkbox h-4 w-4 text-gray-600 rounded">
+                            <span class="ml-2 text-sm font-medium text-gray-700">Modul ausblenden</span>
+                            <span class="ml-1 text-gray-400 cursor-help" title="Ausgeblendete Module werden in der Datenbank grau dargestellt und können nicht zum Plan hinzugefügt werden">
+                                <i data-lucide="info" class="inline-block size-4"></i>
+                            </span>
+                        </label>
+                        <p class="text-xs text-gray-500 mt-1 ml-6">Ausgeblendete Module sind nur noch in der Datenbank sichtbar</p>
+                     </div>
+                     
                      <!-- Buttons -->
                     <div class="flex justify-end gap-2 sticky bottom-0 bg-white py-3"> <!-- Sticky Buttons -->
                         <button type="button" id="cancelModuleEditBtn" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Abbrechen</button>

@@ -10,7 +10,7 @@ async function exportStudyPlan(areas, courses, startSemester) {
         modules: courses,
         startSemester: startSemester,
         exportDate: new Date().toISOString(),
-        version: '1.0'
+        version: '1.1' // Erhöht auf 1.1 für provisional-Feature
     };
 
     const jsonString = JSON.stringify(data, null, 2);
@@ -27,7 +27,7 @@ async function exportModuleDatabase() {
         modules: moduleDatabase,
         areas: scrapedAreas,
         exportDate: new Date().toISOString(),
-        version: '1.0'
+        version: '1.1' // Erhöht auf 1.1
     };
 
     const jsonString = JSON.stringify(data, null, 2);

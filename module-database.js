@@ -253,6 +253,24 @@ function saveAreaToDatabase(area) {
     }
 }
 
+// Toggle favorite status for a module in the database
+function toggleModuleFavorite(moduleId) {
+    try {
+        const modules = loadModuleDatabase();
+        const moduleIndex = modules.findIndex(m => m.id === moduleId);
+        
+        if (moduleIndex >= 0) {
+            modules[moduleIndex].isFavorite = !modules[moduleIndex].isFavorite;
+            saveModuleDatabase(modules);
+            return modules[moduleIndex].isFavorite; // Return new state
+        }
+        return false;
+    } catch (error) {
+        console.error('Error toggling favorite:', error);
+        return false;
+    }
+}
+
 // Exports for use in both app.js and module-scraper.js
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -272,6 +290,7 @@ if (typeof module !== 'undefined' && module.exports) {
         addModuleToDatabase,
         removeModuleFromDatabase,
         updateModuleInDatabase,
+        toggleModuleFavorite, // NEU: Favoriten-Toggle
         loadStoredAreas,
         saveAreaToDatabase,
         loadDbFilters, // Exportieren

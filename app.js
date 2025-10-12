@@ -10,6 +10,36 @@ let dbCurrentAdvancedFilter = null; // Das aktuell angewendete erweiterte Filter
 let savedDbFilters = []; // Geladene Filter aus localStorage
 let dbShowHidden = false;
 let startSemester = { type: 'WiSe', year: 2024 };
+let collapsedAreas = {}; // Speichert, welche Bereiche eingeklappt sind
+
+// Lade collapsed state aus localStorage
+function loadCollapsedState() {
+    try {
+        const stored = localStorage.getItem('collapsedAreas');
+        if (stored) {
+            collapsedAreas = JSON.parse(stored);
+        }
+    } catch (e) {
+        console.error('Error loading collapsed state:', e);
+        collapsedAreas = {};
+    }
+}
+
+// Speichere collapsed state in localStorage
+function saveCollapsedState() {
+    try {
+        localStorage.setItem('collapsedAreas', JSON.stringify(collapsedAreas));
+    } catch (e) {
+        console.error('Error saving collapsed state:', e);
+    }
+}
+
+// Toggle collapsed state für einen Bereich
+function toggleAreaCollapse(areaId) {
+    collapsedAreas[areaId] = !collapsedAreas[areaId];
+    saveCollapsedState();
+    renderAreas();
+}
 
 // Clean area name function - improved to handle trailing numbers and extra whitespace
 function cleanAreaName(name) {
@@ -78,6 +108,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize data
     loadFromLocalStorage();
+    loadCollapsedState(); // Lade collapsed state
     setupAreaAutocomplete();
     setupModuleAutocomplete();
     setupResponsibleAutocomplete();
@@ -117,8 +148,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
 
     // Listener für JSON Export (existierend)
-    const exportButton = document.getElementById('exportButton'); // Angenommen dieser Button existiert noch
-    if (exportButton) exportButton.addEventListener('click', () => window.importExport.exportStudyPlan(areas, courses));
+    const exportButton = document.getElementById('exportButton');
+    if (exportButton) {
+        exportButton.addEventListener('click', () => window.importExport.exportStudyPlan(areas, courses, startSemester));
+    }
 
 
     // NEU: Listener für Word Exporte
@@ -159,6 +192,26 @@ document.addEventListener('DOMContentLoaded', function() {
     const importButton = document.getElementById('importButton');
     if (importButton) {
         importButton.addEventListener('click', importStudyPlan);
+    }
+    
+    // Initialize database import/export buttons
+    const exportDatabaseButton = document.getElementById('exportDatabaseButton');
+    if (exportDatabaseButton) {
+        exportDatabaseButton.addEventListener('click', function() {
+            window.importExport.exportModuleDatabase();
+        });
+    }
+    
+    const importDatabaseButton = document.getElementById('importDatabaseButton');
+    if (importDatabaseButton) {
+        importDatabaseButton.addEventListener('click', async function() {
+            const modules = await window.importExport.importModuleDatabase();
+            if (modules) {
+                updateModuleDatabaseCount();
+                updateModuleDatabaseTable();
+                alert('Moduldatenbank erfolgreich importiert!');
+            }
+        });
     }
 
     // Initialize modal event listeners
@@ -689,11 +742,25 @@ function renderAreas() {
             const titleAndUsageContainer = document.createElement('div');
             titleAndUsageContainer.className = 'flex items-baseline gap-x-2'; // gap-x-2
 
+            // Toggle-Button für Collapse/Expand
+            const isCollapsed = collapsedAreas[area.id] || false;
+            const toggleButton = document.createElement('button');
+            toggleButton.className = 'text-gray-500 hover:text-gray-700 mr-1';
+            toggleButton.innerHTML = isCollapsed 
+                ? '<i data-lucide="chevron-right" class="size-4"></i>' 
+                : '<i data-lucide="chevron-down" class="size-4"></i>';
+            toggleButton.onclick = (e) => {
+                e.stopPropagation();
+                toggleAreaCollapse(area.id);
+            };
+            titleAndUsageContainer.appendChild(toggleButton);
+
             // Bereichstitel (Standard Schriftgröße)
             const areaTitle = document.createElement('h2');
             const titleLPText = (area.creditPoints > 0 || !area.parentId) ? `(${area.creditPoints} LP)` : '';
             areaTitle.innerText = `${area.name} ${titleLPText}`; // LP-Anzeige direkt dran
-            areaTitle.className = 'text-base font-semibold'; // text-base (Standard), font-semibold
+            areaTitle.className = 'text-base font-semibold cursor-pointer'; // cursor-pointer hinzugefügt
+            areaTitle.onclick = () => toggleAreaCollapse(area.id); // Klick auf Titel togglet auch
             titleAndUsageContainer.appendChild(areaTitle);
 
             // LP-Nutzung (kleiner daneben)
@@ -737,9 +804,14 @@ function renderAreas() {
             areaDiv.appendChild(areaHeader);
 
 
-            // Modul-Liste (kompakter)
+            // Modul-Liste (kompakter) - nur anzeigen wenn nicht collapsed
             const moduleList = document.createElement('div');
             moduleList.className = 'mt-1.5 space-y-0.5'; // mt-1.5, space-y-0.5
+            
+            // Verstecke die Modul-Liste wenn collapsed
+            if (isCollapsed) {
+                moduleList.style.display = 'none';
+            }
 
             const areaModules = courses.filter(module => module.areaId === area.id);
             areaModules.sort((a,b) => a.semester - b.semester || a.title.localeCompare(b.title));
@@ -747,16 +819,32 @@ function renderAreas() {
             areaModules.forEach((module) => {
                 const moduleDiv = document.createElement('div');
                 // Weniger Padding, kein Hintergrund, Border unten
-                moduleDiv.className = 'module-item flex justify-between items-center p-1 border-t border-gray-100'; // p-1, border-t
+                // Wenn provisional, ausgegraut
+                const provisionalClass = module.provisional ? 'opacity-50' : '';
+                moduleDiv.className = `module-item flex justify-between items-center p-1 border-t border-gray-100 ${provisionalClass}`; // p-1, border-t
                 // Standard Schriftgröße für Titel, kleinere Details
 
                 const moduleInfo = document.createElement('div');
                 moduleInfo.className = 'flex flex-col';
 
+                const moduleTitleContainer = document.createElement('div');
+                moduleTitleContainer.className = 'flex items-center gap-1.5';
+
                 const moduleTitle = document.createElement('span');
                 moduleTitle.className = 'font-medium'; // Keine explizite Größenänderung -> Standard
                 moduleTitle.innerText = `${module.title} (${module.creditPoints} LP, Sem: ${module.semester})`;
-                moduleInfo.appendChild(moduleTitle);
+                moduleTitleContainer.appendChild(moduleTitle);
+
+                // Info-Icon für provisional-Module
+                if (module.provisional) {
+                    const infoIcon = document.createElement('span');
+                    infoIcon.className = 'text-orange-500 cursor-help';
+                    infoIcon.title = 'Modul unter Vorbehalt - wird nicht in LP-Summen einberechnet';
+                    infoIcon.innerHTML = '<i data-lucide="info" class="inline-block size-3.5"></i>';
+                    moduleTitleContainer.appendChild(infoIcon);
+                }
+
+                moduleInfo.appendChild(moduleTitleContainer);
 
                 const moduleDetails = document.createElement('span');
                 moduleDetails.className = 'text-xs text-gray-600'; // Details bleiben klein
@@ -850,7 +938,8 @@ function getChildrenTotalLP(parentId) {
     let totalLP = childAreas.reduce((sum, area) => sum + area.creditPoints, 0);
     
     // Module, die direkt diesem Bereich zugeordnet sind
-    const directModules = courses.filter(module => module.areaId === parentId);
+    // Module "unter Vorbehalt" werden NICHT mitgezählt
+    const directModules = courses.filter(module => module.areaId === parentId && !module.provisional);
     totalLP += directModules.reduce((sum, module) => sum + module.creditPoints, 0);
     
     return totalLP;
@@ -876,7 +965,10 @@ function updateSemesterView() {
              // Weniger Padding, kein Shadow, nur Hintergrundfarbe, weniger Margin
             semesterDiv.className = `p-2 rounded-md mb-2 ${generateColor(semester)}`;
 
-            const totalLP = modules.reduce((sum, module) => sum + module.creditPoints, 0);
+            // Nur Module OHNE provisional-Flag in die LP-Summe einrechnen
+            const totalLP = modules
+                .filter(module => !module.provisional)
+                .reduce((sum, module) => sum + module.creditPoints, 0);
             totalStudyPlanLPs += totalLP;
 
             const semesterHeader = document.createElement('div');
@@ -908,7 +1000,9 @@ function updateSemesterView() {
             modules.forEach((module) => {
                 const moduleDiv = document.createElement('div');
                  // Kompakteres Padding, Border unten, kein Hintergrund/Schatten
-                moduleDiv.className = 'module-item flex justify-between items-center py-1 px-1.5 border-b border-gray-400/30 last:border-b-0'; // py-1, px-1.5, border-b, last:border-b-0
+                 // Wenn provisional, ausgegraut
+                const provisionalClass = module.provisional ? 'opacity-50' : '';
+                moduleDiv.className = `module-item flex justify-between items-center py-1 px-1.5 border-b border-gray-400/30 last:border-b-0 ${provisionalClass}`; // py-1, px-1.5, border-b, last:border-b-0
 
                 const moduleArea = areas.find(area => area.id === module.areaId);
                 const areaName = moduleArea ? moduleArea.name : "k. Bereich"; // Kürzer
@@ -916,11 +1010,25 @@ function updateSemesterView() {
                 const moduleInfo = document.createElement('div');
                 moduleInfo.className = 'flex flex-col';
 
-                // Titel normale Größe
+                // Titel normale Größe mit Container für Info-Icon
+                const moduleTitleContainer = document.createElement('div');
+                moduleTitleContainer.className = 'flex items-center gap-1.5';
+
                 const moduleTitle = document.createElement('span');
                 moduleTitle.className = 'font-medium leading-tight'; // Normale Größe, engerer Zeilenabstand
                 moduleTitle.innerText = `${module.title} (${module.creditPoints} LP)`;
-                moduleInfo.appendChild(moduleTitle);
+                moduleTitleContainer.appendChild(moduleTitle);
+
+                // Info-Icon für provisional-Module
+                if (module.provisional) {
+                    const infoIcon = document.createElement('span');
+                    infoIcon.className = 'text-orange-500 cursor-help';
+                    infoIcon.title = 'Modul unter Vorbehalt - wird nicht in LP-Summen einberechnet';
+                    infoIcon.innerHTML = '<i data-lucide="info" class="inline-block size-3.5"></i>';
+                    moduleTitleContainer.appendChild(infoIcon);
+                }
+
+                moduleInfo.appendChild(moduleTitleContainer);
 
                 // Details klein
                 const moduleDetails = document.createElement('span');
@@ -963,7 +1071,8 @@ function updateSemesterView() {
 // Rekursive Funktion zur Berechnung der verwendeten LP in einem Bereich und seinen Unterbereichen
 function calculateAreaUsageLP(targetAreaId) {
     // 1. LPs von Modulen, die direkt diesem Bereich zugeordnet sind
-    const directModules = courses.filter(module => module.areaId === targetAreaId);
+    // Module "unter Vorbehalt" werden NICHT mitgezählt
+    const directModules = courses.filter(module => module.areaId === targetAreaId && !module.provisional);
     let usageLP = directModules.reduce((sum, module) => sum + module.creditPoints, 0);
 
     // 2. LPs, die rekursiv in direkten Kindbereichen verwendet werden
@@ -1211,6 +1320,10 @@ function addModule() {
     // Checkboxen für Modultyp auslesen
     const typeCheckboxes = document.querySelectorAll('input[name="moduleType"]:checked');
     const selectedTypes = Array.from(typeCheckboxes).map(cb => cb.value);
+    
+    // Checkbox für "Unter Vorbehalt" auslesen
+    const provisionalCheckbox = document.getElementById('moduleProvisionalCheckbox');
+    const isProvisional = provisionalCheckbox ? provisionalCheckbox.checked : false;
 
     const title = titleInput.value.trim();
     let areaId = areaSelect.value;
@@ -1310,7 +1423,8 @@ function addModule() {
             language: language || (moduleFromDB ? moduleFromDB.language : 'de'),
             department: department || (moduleFromDB ? moduleFromDB.department : ''),
             semester_offered: semesterOffered || (moduleFromDB ? moduleFromDB.semester_offered : 'Beides'),
-            type: finalTypes
+            type: finalTypes,
+            provisional: isProvisional // NEU: Vorbehalt-Flag
         });
         
         // Formular zurücksetzen
@@ -1357,6 +1471,8 @@ function openModuleEditModal(module, isDbModule = false) {
     const areaContainer = document.getElementById('editModuleAreaContainer');          // Container verwenden
     const courseSpecificFields = document.getElementById('editModuleCourseSpecificFields');
     const typeSpecificContainer = document.getElementById('editModuleTypeSpecificContainer');
+    const provisionalContainer = document.getElementById('editModuleProvisionalContainer'); // NEU
+    const hiddenContainer = document.getElementById('editModuleHiddenContainer'); // NEU
 
 
     if (isDbModule) {
@@ -1364,7 +1480,15 @@ function openModuleEditModal(module, isDbModule = false) {
         if (semesterContainer) semesterContainer.classList.add('hidden');
         if (courseSpecificFields) courseSpecificFields.classList.add('hidden');
         if (typeSpecificContainer) typeSpecificContainer.classList.add('hidden');
+        if (provisionalContainer) provisionalContainer.classList.add('hidden'); // NEU: Verstecke für DB-Module
+        if (hiddenContainer) hiddenContainer.classList.remove('hidden'); // NEU: Zeige für DB-Module
         if (areaContainer) areaContainer.classList.remove('hidden'); // Bereich immer anzeigen
+        
+        // Setze Hidden-Checkbox
+        const hiddenCheckbox = document.getElementById('editModuleHiddenCheckbox');
+        if (hiddenCheckbox) {
+            hiddenCheckbox.checked = module.isHidden || false;
+        }
 
         // Bereich als Textfeld für DB-Module
         let areaInput = areaContainer.querySelector('input[type="text"]');
@@ -1406,6 +1530,8 @@ function openModuleEditModal(module, isDbModule = false) {
         if (semesterContainer) semesterContainer.classList.remove('hidden');
         if (courseSpecificFields) courseSpecificFields.classList.remove('hidden');
         if (typeSpecificContainer) typeSpecificContainer.classList.remove('hidden');
+        if (provisionalContainer) provisionalContainer.classList.remove('hidden'); // NEU: Zeige für Plan-Module
+        if (hiddenContainer) hiddenContainer.classList.add('hidden'); // NEU: Verstecke für Plan-Module
         if (areaContainer) areaContainer.classList.remove('hidden'); // Bereich immer anzeigen
          // Link Container ausblenden
          document.getElementById('editDbModuleLinkContainer')?.classList.add('hidden');
@@ -1433,6 +1559,12 @@ function openModuleEditModal(module, isDbModule = false) {
          typeCheckboxes.forEach(cb => {
             cb.checked = module.type && module.type.includes(cb.value);
          });
+         
+         // NEU: Provisional Checkbox setzen
+         const provisionalCheckbox = document.getElementById('editModuleProvisionalCheckbox');
+         if (provisionalCheckbox) {
+             provisionalCheckbox.checked = module.provisional || false;
+         }
     }
 
     modal.classList.remove('hidden');
@@ -1463,6 +1595,10 @@ function saveModuleEditChanges(e) {
         const baseLink = document.getElementById('editDbModuleBaseLink').value.trim();
         const version = document.getElementById('editDbModuleVersion').value.trim() || null; // null wenn leer
         
+        // NEU: Hidden-Status auslesen
+        const hiddenCheckbox = document.getElementById('editModuleHiddenCheckbox');
+        const isHidden = hiddenCheckbox ? hiddenCheckbox.checked : false;
+        
         const updatedData = {
             title: newTitle,
             creditPoints: newLP,
@@ -1471,7 +1607,8 @@ function saveModuleEditChanges(e) {
             semester_offered: newOffered,
             areaName: areaName,
             baseLink: baseLink, // Speichere BaseLink
-            version: version   // Speichere Version
+            version: version,   // Speichere Version
+            isHidden: isHidden  // NEU: Speichere Hidden-Status
             // `lastUpdated` wird in `updateModuleInDatabase` gesetzt
         };
         
@@ -1498,6 +1635,10 @@ function saveModuleEditChanges(e) {
         const typeCheckboxes = document.querySelectorAll('input[name="editModuleType"]:checked');
         const selectedTypes = Array.from(typeCheckboxes).map(cb => cb.value);
         const finalTypes = selectedTypes.length > 0 ? selectedTypes : ['VL'];
+        
+        // NEU: Provisional-Status auslesen
+        const provisionalCheckbox = document.getElementById('editModuleProvisionalCheckbox');
+        const isProvisional = provisionalCheckbox ? provisionalCheckbox.checked : false;
 
         const moduleIndex = courses.findIndex(m => m.id === moduleId);
         if (moduleIndex !== -1) {
@@ -1515,7 +1656,8 @@ function saveModuleEditChanges(e) {
                  responsible: newResponsible,
                  department: newDepartment,
                  semester_offered: newOffered,
-                 type: finalTypes
+                 type: finalTypes,
+                 provisional: isProvisional // NEU: Speichere provisional-Status
                  // lastUpdated wird für Plan-Module nicht separat getrackt
              };
             
@@ -1817,6 +1959,12 @@ async function importStudyPlan() {
             areas = data.areas || [];
             courses = data.modules || [];
             
+            // Migration: Füge 'provisional' Feld hinzu, falls nicht vorhanden (Abwärtskompatibilität)
+            courses = courses.map(module => ({
+                ...module,
+                provisional: module.provisional !== undefined ? module.provisional : false
+            }));
+            
             // Clean up area IDs to ensure consistency
             areas = areas.map(area => {
                 return {
@@ -1849,7 +1997,9 @@ async function importStudyPlan() {
             // Re-render everything
             renderAreas();
             
-            alert('Studienplan erfolgreich importiert!' + semesterInfoMessage);
+            // Info über Version
+            const versionInfo = data.version ? `\nVersion: ${data.version}` : '';
+            alert('Studienplan erfolgreich importiert!' + semesterInfoMessage + versionInfo);
         }
     } catch (error) {
         console.error('Error importing study plan:', error);
@@ -2097,9 +2247,14 @@ function setupAutocompleteFor(input, resultsId, dataArray) {
 function updateModuleDatabaseCount() {
     const moduleDatabase = window.moduleDatabase.loadModuleDatabase();
     const countElement = document.getElementById('moduleDatabaseCount');
+    const formCountElement = document.getElementById('moduleDbCount'); // Im Formular
     
     if (countElement) {
         countElement.textContent = moduleDatabase.length;
+    }
+    
+    if (formCountElement) {
+        formCountElement.textContent = moduleDatabase.length;
     }
 }
 
@@ -2230,11 +2385,6 @@ function updateModuleDatabaseTable() {
             else { addToPlanButtonHtml = `<button class="add-to-plan-btn text-green-500 hover:text-green-700" data-id="${module.id}" title="Zum Plan hinzufügen"><i class="fas fa-plus"></i></button>`; }
 
              row.innerHTML = `
-                <td class="border p-1.5 text-center"> <!-- Fav -->
-                    <button class="favorite-db-module-btn hover:text-yellow-500 ${module.isFavorite ? 'text-yellow-400' : 'text-gray-300'}" data-id="${module.id}" title="Favorisieren">
-                        <i class="fas fa-star"></i>
-                    </button>
-                </td>
                 <td class="border p-1.5"> <!-- Titel -->
                     ${module.baseLink ?
                         `<a href="${module.baseLink}" target="_blank" class="text-blue-600 hover:underline">${module.title}</a>` :
@@ -2248,9 +2398,11 @@ function updateModuleDatabaseTable() {
                 <td class="border p-1.5 text-xs text-gray-500 whitespace-nowrap">${formattedDate}</td> <!-- Aktualisiert -->
                 <td class="border p-1.5"> <!-- Aktionen -->
                     <div class="flex gap-2 items-center justify-center">
+                        <button class="favorite-db-module-btn hover:text-yellow-500 ${module.isFavorite ? 'text-yellow-400' : 'text-gray-300'}" data-id="${module.id}" title="Favorisieren">
+                            <i class="fas fa-star"></i>
+                        </button>
                         ${addToPlanButtonHtml}
                         <button class="edit-db-module-btn text-blue-500 hover:text-blue-700" data-id="${module.id}" data-type="database" title="Bearbeiten"><i class="fas fa-edit"></i></button>
-                        <button class="hide-db-module-btn ${module.isHidden ? 'text-green-500 hover:text-green-700' : 'text-gray-500 hover:text-gray-700'}" data-id="${module.id}" title="${module.isHidden ? 'Einblenden' : 'Ausblenden'}"><i class="fas ${module.isHidden ? 'fa-eye' : 'fa-eye-slash'}"></i></button>
                         <button class="remove-db-module-btn text-red-500 hover:text-red-700" data-id="${module.id}" data-type="database" title="Löschen"><i class="fas fa-trash-alt"></i></button>
                     </div>
                 </td>
@@ -2388,13 +2540,6 @@ function handleModuleDatabaseTableClick(event) {
          if (window.moduleDatabase.updateModuleInDatabase(moduleId, updatedData)) {
              updateModuleDatabaseTable(); // Update nach Änderung
          }
-    }
-    // NEU: Ausblenden / Einblenden
-    else if (button.classList.contains('hide-db-module-btn')) {
-        const updatedData = { isHidden: !moduleData.isHidden };
-        if (window.moduleDatabase.updateModuleInDatabase(moduleId, updatedData)) {
-             updateModuleDatabaseTable(); // Update nach Änderung
-        }
     }
 }
 
