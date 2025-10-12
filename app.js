@@ -1935,10 +1935,10 @@ function loadModuleDatabase() {
     return window.moduleDatabase.loadModuleDatabase();
 }
 
-// Save to file
-async function saveToFile() {
-    window.importExport.exportStudyPlan(areas, courses, startSemester);
-}
+// REMOVED: Die alte saveToFile() Funktion wurde entfernt, um Namenskonflikte zu vermeiden
+// Der Export erfolgt direkt über window.importExport.exportStudyPlan()
+// Falls diese Funktion woanders aufgerufen wird, verwenden Sie stattdessen:
+// await window.importExport.exportStudyPlan(areas, courses, startSemester);
 
 // Import study plan from file
 async function importStudyPlan() {
