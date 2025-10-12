@@ -5,6 +5,8 @@
 
 // Export study plan to file
 async function exportStudyPlan(areas, courses, startSemester) {
+    console.log('exportStudyPlan called with:', { areas: areas?.length, courses: courses?.length, startSemester });
+    
     const data = {
         areas: areas,
         modules: courses,
@@ -14,14 +16,19 @@ async function exportStudyPlan(areas, courses, startSemester) {
     };
 
     const jsonString = JSON.stringify(data, null, 2);
+    console.log('Exporting study plan data. Data size:', jsonString.length, 'bytes');
     await saveToFile(jsonString, 'studyplan.json');
     return true;
 }
 
 // Export module database to file
 async function exportModuleDatabase() {
+    console.log('exportModuleDatabase called');
+    
     const moduleDatabase = window.moduleDatabase.loadModuleDatabase();
     const scrapedAreas = JSON.parse(localStorage.getItem('scrapedAreas') || '[]');
+    
+    console.log('Exporting module database:', { modules: moduleDatabase?.length, areas: scrapedAreas?.length });
     
     const data = {
         modules: moduleDatabase,
@@ -31,14 +38,16 @@ async function exportModuleDatabase() {
     };
 
     const jsonString = JSON.stringify(data, null, 2);
+    console.log('Module database data size:', jsonString.length, 'bytes');
     await saveToFile(jsonString, 'module_database.json');
     return true;
 }
 
 // Generic save to file function
 async function saveToFile(jsonString, defaultFilename) {
-    // Check if the File System Access API is supported
-    if ('showSaveFilePicker' in window) {
+    // Check if the File System Access API is supported and available in secure context
+    if (window.isSecureContext && 'showSaveFilePicker' in window) {
+        console.log('Attempting to use File System Access API...');
         const options = {
             suggestedName: defaultFilename,
             types: [{
@@ -54,15 +63,23 @@ async function saveToFile(jsonString, defaultFilename) {
             const writable = await handle.createWritable();
             await writable.write(jsonString);
             await writable.close();
-            console.log('Data saved to file successfully.');
+            console.log('Data saved to file successfully via File System Access API.');
             return true;
         } catch (error) {
-            console.error('Error saving to file:', error);
+            // User cancelled the dialog
+            if (error.name === 'AbortError') {
+                console.log('File save cancelled by user.');
+                return false;
+            }
+            // Other error - use fallback
+            console.error('Error saving to file via API, using fallback:', error);
             fallbackSave(jsonString, defaultFilename);
             return true;
         }
     } else {
         // Fallback for browsers that don't support the File System Access API
+        // or when not in secure context
+        console.log('Using fallback download method (File System Access API not available).');
         fallbackSave(jsonString, defaultFilename);
         return true;
     }
